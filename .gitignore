@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+out/
+.next/
+.vercel/
+
+# Banco SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Variáveis de ambiente (NUNCA commitar)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Chave SSH (NUNCA commitar!)
+*.pem
+*.key
