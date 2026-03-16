@@ -1,5 +1,3 @@
-import React from 'react';
-
 type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio';
 
 interface Props {
