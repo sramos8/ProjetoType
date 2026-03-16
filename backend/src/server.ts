@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:4173'],
+  origin: ['http://localhost:5173', 'http://localhost:4173', 'https://padaria-crud.vercel.app', 'https://seu-app.vercel.app'],
 }));
 app.use(express.json());
 
