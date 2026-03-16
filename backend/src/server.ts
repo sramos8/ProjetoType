@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3333;
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:4173', 'https://padaria-crud.vercel.app', 'https://padaria-crud-sramos8-1211-sramos8gmailcoms-projects.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:4173', 'https://padaria-crud.vercel.app', 'https://padaria-crud-sramos8-1211-sramos8gmailcoms-projects.vercel.app', 'https://44.223.65.79/'],
 }));
 app.use(express.json());
 
