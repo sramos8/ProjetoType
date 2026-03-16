@@ -1,0 +1,53 @@
+# /etc/nginx/sites-available/padaria-api
+#
+# INSTRUÇÕES:
+#   1. Substitua "api.seudominio.com" pelo seu domínio real
+#   2. Copie para: sudo cp padaria-api /etc/nginx/sites-available/
+#   3. Ative: sudo ln -s /etc/nginx/sites-available/padaria-api /etc/nginx/sites-enabled/
+#   4. Teste: sudo nginx -t
+#   5. Recarregue: sudo systemctl reload nginx
+#   6. Gere SSL: sudo certbot --nginx -d api.seudominio.com
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.seudominio.com;
+
+    # Certbot vai adicionar o bloco SSL automaticamente abaixo
+    # após executar: sudo certbot --nginx -d api.seudominio.com
+
+    # Segurança básica
+    server_tokens off;
+
+    # Limite de tamanho de request (proteção contra uploads grandes)
+    client_max_body_size 10M;
+
+    # Logs
+    access_log /var/log/nginx/padaria-api.access.log;
+    error_log  /var/log/nginx/padaria-api.error.log;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3333;
+        proxy_http_version 1.1;
+
+        # Headers necessários para WebSocket e proxy correto
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        'upgrade';
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+    }
+
+    # Health check sem logs
+    location /health {
+        proxy_pass http://127.0.0.1:3333/health;
+        access_log off;
+    }
+}
