@@ -4,7 +4,12 @@ interface Props {
   onNavegar: (aba: Tab) => void;
 }
 
-export function Home({ onNavegar }: Props) {
+interface Props {
+  onNavegar: (aba: Tab) => void;
+  role?: string;
+}
+
+export function Home({ onNavegar, role }: Props) {
   const cards = [
     {
       id: 'produtos' as Tab,
@@ -46,6 +51,16 @@ export function Home({ onNavegar }: Props) {
       border: '#A7F3D0',
       tag: 'Análise financeira',
     },
+    ...(role === 'admin' ? [{
+      id: 'usuarios' as Tab,
+      emoji: '👥',
+      titulo: 'Usuários',
+      descricao: 'Gerencie os usuários do sistema e suas permissões',
+      cor: '#8B5CF6',
+      bg: '#F3E8FF',
+      border: '#EDE9FE',
+      tag: 'Gestão de usuários',
+    }] : []),
   ];
 
   return (

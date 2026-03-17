@@ -16,7 +16,7 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [processando, setProcessando] = useState(true);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
     const tokenSalvo = localStorage.getItem('token');
@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(tokenSalvo);
       setUsuario(JSON.parse(usuarioSalvo));
     }
-    setProcessando(false);
+    setCarregando(false);
   }, []);
 
   const login = async (email: string, senha: string) => {
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      usuario, token, logado: !!token, carregando: processando, login, logout,
+      usuario, token, logado: !!token, carregando , login, logout,
     }}>
       {children}
     </AuthContext.Provider>
