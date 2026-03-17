@@ -45,10 +45,32 @@ CREATE TABLE IF NOT EXISTS vendas (
     subtotal       REAL NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id        TEXT PRIMARY KEY,
+    nome      TEXT NOT NULL,
+    email     TEXT NOT NULL UNIQUE,
+    senha     TEXT NOT NULL,
+    role      TEXT NOT NULL DEFAULT 'operador' CHECK(role IN ('admin','operador')),
+    ativo     INTEGER NOT NULL DEFAULT 1,
+    criadoEm TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_itens_venda ON itens_venda(vendaId);
   CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status);
   CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(criadoEm);
 `);
+
+// Criar admin padrão se não existir
+const adminExiste = db.prepare("SELECT id FROM usuarios WHERE email = 'admin@padaria.com'").get();
+if (!adminExiste) {
+  const bcrypt = require('bcryptjs');
+  const hash = bcrypt.hashSync('admin123', 10);
+  db.prepare(`
+    INSERT INTO usuarios (id, nome, email, senha, role, ativo, criadoEm)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run('1', 'Administrador', 'admin@padaria.com', hash, 'admin', 1, new Date().toISOString());
+  console.log('👤 Admin criado: admin@padaria.com / admin123');
+}
 
 const count  = (db.prepare('SELECT COUNT(*) AS c FROM produtos').get() as { c: number }).c;
 
