@@ -49,7 +49,10 @@ CREATE TABLE IF NOT EXISTS vendas (
     id        TEXT PRIMARY KEY,
     nome      TEXT NOT NULL,
     email     TEXT NOT NULL UNIQUE,
+    cpf       TEXT NOT NULL UNIQUE,
     senha     TEXT NOT NULL,
+    idade     INTEGER,
+    sexo      TEXT CHECK(sexo IN ('M','F','outro')),
     role      TEXT NOT NULL DEFAULT 'operador' CHECK(role IN ('admin','operador')),
     ativo     INTEGER NOT NULL DEFAULT 1,
     criadoEm TEXT NOT NULL
