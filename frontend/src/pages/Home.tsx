@@ -5,11 +5,6 @@ interface Props {
    role?: string;
 }
 
-interface Props {
-  onNavegar: (aba: Tab) => void;
-  role?: string;
-}
-
 export function Home({ onNavegar, role }: Props) {
   const cards = [
     {
