@@ -69,9 +69,9 @@ if (!adminExiste) {
   const bcrypt = require('bcryptjs');
   const hash = bcrypt.hashSync('admin123', 10);
   db.prepare(`
-    INSERT INTO usuarios (id, nome, email, senha, role, ativo, criadoEm)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run('1', 'Administrador', 'admin@padaria.com', hash, 'admin', 1, new Date().toISOString());
+    INSERT INTO usuarios (id, nome, email, cpf, senha, idade, sexo, role, ativo, criadoEm)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('1', 'Administrador', 'admin@padaria.com', '123.456.789-00', hash, null, null, 'admin', 1, new Date().toISOString());
   console.log('👤 Admin criado: admin@padaria.com / admin123');
 }
 
