@@ -1,10 +1,5 @@
-import axios from 'axios';
+import { api } from './authService';
 import type { Produto, CriarProdutoDTO, AtualizarProdutoDTO, Estatisticas } from '../types';
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333/api'
-});
-
 
 export const produtoService = {
   listar: async (params?: { categoria?: string; busca?: string; disponivel?: boolean }) => {

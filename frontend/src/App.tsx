@@ -9,6 +9,8 @@ import { PDV } from './pages/PDV';
 import { Historico } from './pages/Historico';
 import { Relatorio } from './pages/Relatorio';
 import { Home } from './pages/Home';
+import { useAuth } from './contexts/AuthContext';
+import { Login } from './pages/Login';
 
 type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio';
 
@@ -22,6 +24,33 @@ export default function App() {
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | undefined>();
   const [confirmarDelete, setConfirmarDelete] = useState<string | null>(null);
+
+  const { logado, processando, usuario, logout } = useAuth();
+
+  if (processando) return (
+  <div style={{ minHeight: '100vh', background: '#2C1A0E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <span style={{ fontSize: '3rem' }}>🥐</span>
+  </div>
+);
+if (!logado) return <Login />;
+
+// No header, adicione o botão logout após a nav:
+<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+  <span style={{ fontSize: '0.82rem', color: '#A07850', fontFamily: "'DM Sans', sans-serif" }}>
+    👤 {usuario?.nome}
+  </span>
+  <button
+    onClick={logout}
+    style={{
+      padding: '0.45rem 1rem', background: 'transparent',
+      border: '1px solid #5C3D2E', borderRadius: '0.5rem',
+      color: '#A07850', cursor: 'pointer',
+      fontFamily: "'DM Sans', sans-serif", fontSize: '0.82rem',
+    }}
+  >
+    Sair
+  </button>
+</div>
 
   const carregar = useCallback(async () => {
     setCarregando(true);

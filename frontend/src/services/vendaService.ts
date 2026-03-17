@@ -1,9 +1,5 @@
-import axios from 'axios';
+import { api } from './authService';
 import type { Venda, Relatorio } from '../types/venda';
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333/api'
-});
 
 export const vendaService = {
   criar: async () => {
