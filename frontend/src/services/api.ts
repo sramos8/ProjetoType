@@ -1,4 +1,4 @@
-import { api } from './authService';
+import { api } from './authService'; // ← usar o mesmo api com token
 import type { Produto, CriarProdutoDTO, AtualizarProdutoDTO, Estatisticas } from '../types';
 
 export const produtoService = {

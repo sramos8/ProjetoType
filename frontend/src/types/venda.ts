@@ -20,10 +20,13 @@ export interface Venda {
   troco: number | null;
   observacao: string;
   itens: ItemVenda[];
+  usuarioId: string | null;    // ← adicionar
+  usuarioNome: string | null;  // ← adicionar
   criadoEm: string;
   concluidoEm: string | null;
 }
 
+// Adicione ao tipo Relatorio:
 export interface Relatorio {
   resumo: {
     totalVendas: number;
@@ -32,7 +35,19 @@ export interface Relatorio {
     canceladas: number;
   };
   porFormaPagamento: { formaPagamento: string; qtd: number; total: number }[];
-  produtosMaisVendidos: { nomeProduto: string; totalQtd: number; totalValor: number }[];
+  produtosMaisVendidos: { produtoId: string; nomeProduto: string; totalQtd: number; totalValor: number }[];
+  porOperador: { operador: string; totalVendas: number; totalFaturado: number }[];
+  detalheVendas: {
+    vendaId: string;
+    dataVenda: string;
+    operador: string;
+    nomeProduto: string;
+    quantidade: number;
+    precoUnitario: number;
+    subtotal: number;
+    formaPagamento: string;
+    valorTotal: number;
+  }[];
   vendasPorDia: { dia: string; qtd: number; total: number }[];
 }
 

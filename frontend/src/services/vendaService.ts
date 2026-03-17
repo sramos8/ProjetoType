@@ -1,5 +1,9 @@
-import { api } from './authService';
+import { api } from './authService'; // ← importar o api com interceptor de token
 import type { Venda, Relatorio } from '../types/venda';
+
+// REMOVA qualquer import de axios e criação local de instância como:
+// import axios from 'axios';
+// const api = axios.create({ baseURL: ... });
 
 export const vendaService = {
   criar: async () => {
@@ -28,7 +32,8 @@ export const vendaService = {
   },
   concluir: async (vendaId: string, formaPagamento: string, valorPago: number, observacao?: string) => {
     const { data } = await api.post<{ data: Venda; mensagem: string }>(
-      `/vendas/${vendaId}/concluir`, { formaPagamento, valorPago, observacao }
+      `/vendas/${vendaId}/concluir`,
+      { formaPagamento, valorPago, observacao }
     );
     return data;
   },
