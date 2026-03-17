@@ -129,8 +129,17 @@ export const concluirVenda = (req: Request, res: Response): void => {
     return;
   }
 
+  // Pegar usuário logado do token
+  const usuarioId   = req.usuario?.id   || null;
+  const usuarioNome = req.usuario?.email || null;
+
+  // Buscar nome completo do usuário
+  const usuarioDb = usuarioId
+    ? db.prepare('SELECT nome FROM usuarios WHERE id = ?').get(usuarioId) as { nome: string } | undefined
+    : undefined;
+  const nomeOperador = usuarioDb?.nome || usuarioNome || 'Sistema';
+
   const transacao = db.transaction(() => {
-    // 1. Baixa no estoque de cada item
     for (const item of venda.itens) {
       const prod = db.prepare('SELECT estoque FROM produtos WHERE id = ?').get(item.produtoId) as { estoque: number };
       if (prod.estoque < item.quantidade) {
@@ -139,14 +148,18 @@ export const concluirVenda = (req: Request, res: Response): void => {
       db.prepare('UPDATE produtos SET estoque = estoque - ?, atualizadoEm = ? WHERE id = ?')
         .run(item.quantidade, new Date().toISOString(), item.produtoId);
     }
-    // 2. Finalizar venda
     const troco = valorPago - venda.valorTotal;
     db.prepare(`
       UPDATE vendas
       SET status = 'concluida', formaPagamento = ?, valorPago = ?, troco = ?,
-          observacao = ?, concluidoEm = ?
+          observacao = ?, concluidoEm = ?, usuarioId = ?, usuarioNome = ?
       WHERE id = ?
-    `).run(formaPagamento, valorPago, troco, observacao ?? '', new Date().toISOString(), vendaId);
+    `).run(
+      formaPagamento, valorPago, troco,
+      observacao ?? '', new Date().toISOString(),
+      usuarioId, nomeOperador,
+      vendaId
+    );
   });
 
   try {
@@ -174,61 +187,156 @@ export const buscarVenda = (req: Request, res: Response): void => {
   res.json({ data: venda });
 };
 
-// ── Listar vendas (histórico) ─────────────────────────────────
+/// ── Listar vendas (histórico) — só concluídas ─────────────────
 export const listarVendas = (req: Request, res: Response): void => {
   const { status, dataInicio, dataFim, limit = '50', offset = '0' } = req.query;
-  let query = 'SELECT * FROM vendas WHERE 1=1';
-  const params: unknown[] = [];
-  if (status) { query += ' AND status = ?'; params.push(status); }
+
+  const statusFiltro = (status as string) || 'concluida';
+
+  let query = 'SELECT * FROM vendas WHERE status = ?';
+  const params: unknown[] = [statusFiltro];
+
   if (dataInicio) { query += ' AND criadoEm >= ?'; params.push(dataInicio); }
-  if (dataFim) { query += ' AND criadoEm <= ?'; params.push(dataFim + 'T23:59:59'); }
+  if (dataFim)    { query += ' AND criadoEm <= ?'; params.push(`${dataFim}T23:59:59`); }
+
   query += ' ORDER BY criadoEm DESC LIMIT ? OFFSET ?';
   params.push(Number(limit), Number(offset));
 
   const vendas = db.prepare(query).all(...params) as Omit<Venda, 'itens'>[];
-  const total = (db.prepare('SELECT COUNT(*) as c FROM vendas WHERE 1=1').get() as { c: number }).c;
-  res.json({ data: vendas, total });
+
+  // Buscar itens de CADA venda individualmente
+  const stmtItens = db.prepare('SELECT * FROM itens_venda WHERE vendaId = ?');
+
+  const vendasComItens = vendas.map(v => {
+    const itens = stmtItens.all(v.id) as ItemVenda[];
+    return { ...v, itens };
+  });
+
+  const total = (db.prepare(
+    'SELECT COUNT(*) as c FROM vendas WHERE status = ?'
+  ).get(statusFiltro) as { c: number }).c;
+
+  res.json({ data: vendasComItens, total });
 };
 
 // ── Relatório de faturamento ──────────────────────────────────
 export const relatorio = (req: Request, res: Response): void => {
   const { dataInicio, dataFim } = req.query;
+
   const filtroData = dataInicio && dataFim
-    ? `AND criadoEm BETWEEN '${dataInicio}' AND '${dataFim}T23:59:59'`
+    ? `AND v.criadoEm BETWEEN '${dataInicio}' AND '${dataFim}T23:59:59'`
     : '';
 
+  // Resumo geral
   const resumo = db.prepare(`
     SELECT
-      COUNT(*) as totalVendas,
-      COALESCE(SUM(valorTotal), 0) as faturamentoBruto,
-      COALESCE(AVG(valorTotal), 0) as ticketMedio,
-      COUNT(CASE WHEN status='cancelada' THEN 1 END) as canceladas
-    FROM vendas WHERE status = 'concluida' ${filtroData}
-  `).get() as { totalVendas: number; faturamentoBruto: number; ticketMedio: number; canceladas: number };
+      COUNT(*)                                              as totalVendas,
+      COALESCE(SUM(valorTotal), 0)                         as faturamentoBruto,
+      COALESCE(AVG(valorTotal), 0)                         as ticketMedio,
+      COUNT(CASE WHEN status='cancelada' THEN 1 END)       as canceladas
+    FROM vendas
+    WHERE status = 'concluida' ${filtroData.replace(/v\./g, '')}
+  `).get() as {
+    totalVendas: number;
+    faturamentoBruto: number;
+    ticketMedio: number;
+    canceladas: number;
+  };
 
+  // Por forma de pagamento
   const porFormaPagamento = db.prepare(`
     SELECT formaPagamento, COUNT(*) as qtd, SUM(valorTotal) as total
-    FROM vendas WHERE status = 'concluida' ${filtroData}
+    FROM vendas
+    WHERE status = 'concluida' ${filtroData.replace(/v\./g, '')}
     GROUP BY formaPagamento
   `).all() as { formaPagamento: string; qtd: number; total: number }[];
 
+  // Produtos mais vendidos com detalhe
   const produtosMaisVendidos = db.prepare(`
-    SELECT iv.nomeProduto, SUM(iv.quantidade) as totalQtd, SUM(iv.subtotal) as totalValor
+    SELECT
+      iv.produtoId,
+      iv.nomeProduto,
+      SUM(iv.quantidade)  as totalQtd,
+      SUM(iv.subtotal)    as totalValor
     FROM itens_venda iv
     JOIN vendas v ON iv.vendaId = v.id
     WHERE v.status = 'concluida' ${filtroData}
     GROUP BY iv.produtoId, iv.nomeProduto
-    ORDER BY totalQtd DESC LIMIT 10
-  `).all() as { nomeProduto: string; totalQtd: number; totalValor: number }[];
+    ORDER BY totalQtd DESC
+    LIMIT 10
+  `).all() as {
+    produtoId: string;
+    nomeProduto: string;
+    totalQtd: number;
+    totalValor: number;
+  }[];
 
+  // Vendas por operador
+  const porOperador = db.prepare(`
+    SELECT
+      COALESCE(usuarioNome, 'Desconhecido') as operador,
+      COUNT(*)                              as totalVendas,
+      SUM(valorTotal)                       as totalFaturado
+    FROM vendas
+    WHERE status = 'concluida' ${filtroData.replace(/v\./g, '')}
+    GROUP BY usuarioNome
+    ORDER BY totalFaturado DESC
+  `).all() as {
+    operador: string;
+    totalVendas: number;
+    totalFaturado: number;
+  }[];
+
+  // Detalhe completo: produto + quantidade + operador por venda
+  const detalheVendas = db.prepare(`
+    SELECT
+      v.id                                        as vendaId,
+      strftime('%d/%m/%Y %H:%M', v.concluidoEm)  as dataVenda,
+      COALESCE(v.usuarioNome, 'Desconhecido')     as operador,
+      iv.nomeProduto,
+      iv.quantidade,
+      iv.precoUnitario,
+      iv.subtotal,
+      v.formaPagamento,
+      v.valorTotal
+    FROM itens_venda iv
+    JOIN vendas v ON iv.vendaId = v.id
+    WHERE v.status = 'concluida' ${filtroData}
+    ORDER BY v.concluidoEm DESC
+    LIMIT 200
+  `).all() as {
+    vendaId: string;
+    dataVenda: string;
+    operador: string;
+    nomeProduto: string;
+    quantidade: number;
+    precoUnitario: number;
+    subtotal: number;
+    formaPagamento: string;
+    valorTotal: number;
+  }[];
+
+  // Vendas por dia
   const vendasPorDia = db.prepare(`
-    SELECT DATE(criadoEm) as dia,
-           COUNT(*) as qtd,
-           SUM(valorTotal) as total
-    FROM vendas WHERE status = 'concluida' ${filtroData}
+    SELECT
+      DATE(criadoEm) as dia,
+      COUNT(*)       as qtd,
+      SUM(valorTotal) as total
+    FROM vendas
+    WHERE status = 'concluida' ${filtroData.replace(/v\./g, '')}
     GROUP BY DATE(criadoEm)
-    ORDER BY dia DESC LIMIT 30
+    ORDER BY dia DESC
+    LIMIT 30
   `).all() as { dia: string; qtd: number; total: number }[];
 
-  res.json({ data: { resumo, porFormaPagamento, produtosMaisVendidos, vendasPorDia } });
+  res.json({
+    data: {
+      resumo,
+      porFormaPagamento,
+      produtosMaisVendidos,
+      porOperador,
+      detalheVendas,
+      vendasPorDia,
+    }
+  });
 };
