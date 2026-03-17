@@ -1,7 +1,8 @@
-type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio';
+type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio' | 'usuarios';
 
 interface Props {
   onNavegar: (aba: Tab) => void;
+   role?: string;
 }
 
 interface Props {

@@ -74,7 +74,7 @@ export default function App() {
 
   if (!logado) return <Login />;
 
-  if (aba === 'home') return <Home onNavegar={setAba} role={usuario?.role} />;
+  if (aba === 'home') return <Home onNavegar={setAba}/>;
 
   if (aba === 'usuarios') return <CadastroUsuario onVoltar={() => setAba('home')} />;
 
