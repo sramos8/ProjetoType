@@ -11,10 +11,13 @@ import { Relatorio } from './pages/Relatorio';
 import { Home } from './pages/Home';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/Login';
+import { CadastroUsuario } from './pages/CadastroUsuario';
 
-type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio';
+type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio' | 'usuarios';
 
 export default function App() {
+  const { logado, carregando: authCarregando, usuario, logout } = useAuth();
+
   const [aba, setAba] = useState<Tab>('home');
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [stats, setStats] = useState<Estatisticas | null>(null);
@@ -24,33 +27,6 @@ export default function App() {
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | undefined>();
   const [confirmarDelete, setConfirmarDelete] = useState<string | null>(null);
-
-  const { logado, processando, usuario, logout } = useAuth();
-
-  if (processando) return (
-  <div style={{ minHeight: '100vh', background: '#2C1A0E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <span style={{ fontSize: '3rem' }}>🥐</span>
-  </div>
-);
-if (!logado) return <Login />;
-
-// No header, adicione o botão logout após a nav:
-<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
-  <span style={{ fontSize: '0.82rem', color: '#A07850', fontFamily: "'DM Sans', sans-serif" }}>
-    👤 {usuario?.nome}
-  </span>
-  <button
-    onClick={logout}
-    style={{
-      padding: '0.45rem 1rem', background: 'transparent',
-      border: '1px solid #5C3D2E', borderRadius: '0.5rem',
-      color: '#A07850', cursor: 'pointer',
-      fontFamily: "'DM Sans', sans-serif", fontSize: '0.82rem',
-    }}
-  >
-    Sair
-  </button>
-</div>
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -84,18 +60,38 @@ if (!logado) return <Login />;
     await carregar();
   };
 
-  // Home não aparece na navbar — é acessada só pelo logo
+  // ── Guards ────────────────────────────────────────────────
+  if (authCarregando) return (
+    <div style={{
+      minHeight: '100vh', background: '#2C1A0E',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <span style={{ fontSize: '3rem' }}>🥐</span>
+    </div>
+  );
+
+  if (!logado) return <Login />;
+
+  // ── Home sem header ───────────────────────────────────────
+  if (aba === 'home') {
+    return <Home onNavegar={setAba} />;
+  }
+
+  // ── Cadastro de usuário sem header padrão ─────────────────
+  if (aba === 'usuarios') {
+    return <CadastroUsuario onVoltar={() => setAba('home')} />;
+  }
+
+  // ── Abas do menu ──────────────────────────────────────────
   const ABAS: { id: Tab; label: string; emoji: string }[] = [
     { id: 'pdv',       label: 'PDV',       emoji: '🛒' },
     { id: 'historico', label: 'Histórico', emoji: '📋' },
     { id: 'relatorio', label: 'Relatório', emoji: '📊' },
     { id: 'produtos',  label: 'Produtos',  emoji: '📦' },
+    ...(usuario?.role === 'admin'
+      ? [{ id: 'usuarios' as Tab, label: 'Usuários', emoji: '👥' }]
+      : []),
   ];
-
-  // Se for Home, renderiza sem header de navegação
-  if (aba === 'home') {
-    return <Home onNavegar={setAba} />;
-  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#FDF6EC', fontFamily: "'DM Sans', sans-serif" }}>
@@ -107,7 +103,7 @@ if (!logado) return <Login />;
           display: 'flex', alignItems: 'center', gap: '2rem',
         }}>
 
-          {/* Logo — volta para Home */}
+          {/* Logo */}
           <div
             onClick={() => setAba('home')}
             style={{ padding: '1rem 0', cursor: 'pointer', flexShrink: 0 }}
@@ -115,7 +111,6 @@ if (!logado) return <Login />;
             <div style={{
               fontFamily: "'Playfair Display', serif",
               fontSize: '1.5rem', color: '#F5DEB3', fontWeight: 700,
-              transition: 'opacity 0.15s',
             }}>
               🥐 Padaria
             </div>
@@ -146,19 +141,54 @@ if (!logado) return <Login />;
             ))}
           </nav>
 
-          {/* Botão novo produto */}
-          {aba === 'produtos' && (
+          {/* Direita — usuário logado + logout */}
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            gap: '0.75rem', flexShrink: 0,
+          }}>
+            {aba === 'produtos' && (
+              <button
+                onClick={() => { setProdutoEditando(undefined); setModalAberto(true); }}
+                style={{
+                  padding: '0.45rem 1rem', background: '#C8822A', color: '#fff',
+                  border: 'none', borderRadius: '0.5rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem',
+                }}
+              >
+                + Novo Produto
+              </button>
+            )}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              gap: '0.5rem', padding: '0.35rem 0.75rem',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '999px',
+            }}>
+              <span style={{ fontSize: '0.9rem' }}>
+                {usuario?.role === 'admin' ? '👑' : '👷'}
+              </span>
+              <span style={{
+                fontSize: '0.82rem', color: '#A07850',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                {usuario?.nome}
+              </span>
+            </div>
             <button
-              onClick={() => { setProdutoEditando(undefined); setModalAberto(true); }}
+              onClick={logout}
               style={{
-                padding: '0.55rem 1.2rem', background: '#C8822A', color: '#fff',
-                border: 'none', borderRadius: '0.5rem', fontFamily: "'DM Sans', sans-serif",
-                fontWeight: 700, cursor: 'pointer', fontSize: '0.88rem', flexShrink: 0,
+                padding: '0.45rem 1rem', background: 'transparent',
+                border: '1px solid #5C3D2E', borderRadius: '0.5rem',
+                color: '#A07850', cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif", fontSize: '0.82rem',
+                transition: 'all 0.15s',
               }}
             >
-              + Novo Produto
+              Sair
             </button>
-          )}
+          </div>
         </div>
       </header>
 
@@ -169,8 +199,6 @@ if (!logado) return <Login />;
 
       {aba === 'produtos' && (
         <main style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem' }}>
-
-          {/* Stats */}
           {stats && (
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3,1fr)',
@@ -178,8 +206,8 @@ if (!logado) return <Login />;
             }}>
               {[
                 { label: 'Total de produtos', valor: stats.total, emoji: '📦' },
-                { label: 'Disponíveis',       valor: stats.disponiveis, emoji: '✅' },
-                { label: 'Valor em estoque',  valor: stats.valorEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), emoji: '💰' },
+                { label: 'Disponíveis', valor: stats.disponiveis, emoji: '✅' },
+                { label: 'Valor em estoque', valor: stats.valorEstoque.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), emoji: '💰' },
               ].map(s => (
                 <div key={s.label} style={{
                   background: '#FFFBF5', border: '1px solid #E8D5B0',
@@ -200,7 +228,6 @@ if (!logado) return <Login />;
             </div>
           )}
 
-          {/* Filtros */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
             <input
               style={{
@@ -236,7 +263,6 @@ if (!logado) return <Login />;
             </div>
           </div>
 
-          {/* Grid de produtos */}
           {carregando
             ? <div style={{ textAlign: 'center', padding: '3rem', color: '#8B6F5E' }}>Carregando...</div>
             : (

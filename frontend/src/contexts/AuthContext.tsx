@@ -6,7 +6,7 @@ interface AuthContextType {
   usuario: Usuario | null;
   token: string | null;
   logado: boolean;
-  processando: boolean;
+  carregando: boolean;
   login: (email: string, senha: string) => Promise<void>;
   logout: () => void;
 }
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      usuario, token, logado: !!token, processando, login, logout,
+      usuario, token, logado: !!token, carregando: processando, login, logout,
     }}>
       {children}
     </AuthContext.Provider>
