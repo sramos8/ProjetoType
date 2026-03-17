@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import produtosRoutes from "./routes/produtos.routes";
 import vendaRoutes from './routes/venda.routes';
+import authRoutes from './routes/auth.routes';
+import { autenticar } from './middleware/auth.middleware';
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -17,8 +19,12 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use('/api/produtos', produtosRoutes);
-app.use('/api/vendas', vendaRoutes);
+// Rota pública
+app.use('/api/auth', authRoutes);
+
+// Rotas protegidas — exige token
+app.use('/api/produtos', autenticar, produtosRoutes);
+app.use('/api/vendas', autenticar, vendaRoutes);
 
 app.get('/health', (_req, res) =>
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
