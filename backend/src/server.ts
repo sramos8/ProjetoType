@@ -20,3 +20,4 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().
 app.listen(PORT, () => {
     console.log(`🍞 Servidor rodando na porta ${PORT} e ${produtosRoutes}`);
 });
+# deploy
