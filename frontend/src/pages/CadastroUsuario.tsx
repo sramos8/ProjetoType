@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../services/authService';
 import { formatarCPF, validarCPF, limparCPF } from '../utils/cpf';
 
@@ -18,104 +18,122 @@ const vazio: FormData = {
   confirmarSenha: '', idade: '', sexo: '', role: 'operador',
 };
 
+type CPFStatus = 'idle' | 'digitando' | 'invalido' | 'verificando' | 'livre' | 'cadastrado';
+
 interface Props {
   onVoltar: () => void;
 }
 
 export function CadastroUsuario({ onVoltar }: Props) {
   const [form, setForm] = useState<FormData>(vazio);
-  const [erros, setErros] = useState<Partial<FormData>>({});
-  const [cpfStatus, setCpfStatus] = useState<'idle' | 'buscando' | 'encontrado' | 'livre' | 'invalido'>('idle');
+  const [erros, setErros] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [cpfStatus, setCpfStatus] = useState<CPFStatus>('idle');
   const [sucesso, setSucesso] = useState('');
   const [erroGeral, setErroGeral] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
   const cpfTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const set = (campo: keyof FormData, valor: string) => {
     setForm(f => ({ ...f, [campo]: valor }));
     setErros(e => ({ ...e, [campo]: '' }));
+    setErroGeral('');
   };
 
-  // ── Ao digitar CPF — busca automática ──────────────────────
-  const handleCPF = (valor: string) => {
-    const formatado = formatarCPF(valor);
-    set('cpf', formatado);
-    const limpo = limparCPF(formatado);
-
+  // ── Limpar ao montar ───────────────────────────────────────
+  useEffect(() => () => {
     if (cpfTimer.current) clearTimeout(cpfTimer.current);
+  }, []);
 
-    if (limpo.length < 11) {
-      setCpfStatus('idle');
-      return;
-    }
+  // ── Handler CPF ───────────────────────────────────────────
+const handleCPF = (valor: string) => {
+  const formatado = formatarCPF(valor);
+  set('cpf', formatado);
+  const limpo = limparCPF(formatado);
 
-    if (!validarCPF(limpo)) {
-      setCpfStatus('invalido');
-      setErros(e => ({ ...e, cpf: 'CPF inválido' }));
-      return;
-    }
+  if (cpfTimer.current) clearTimeout(cpfTimer.current);
 
-    // Buscar no backend
-    setCpfStatus('buscando');
-    cpfTimer.current = setTimeout(async () => {
-      try {
-        const { data } = await api.get(`/auth/cpf/${limpo}`);
-        const u = data.data;
-        // Preencher campos automaticamente
-        setForm(f => ({
-          ...f,
-          nome:  u.nome  || f.nome,
-          idade: u.idade ? String(u.idade) : f.idade,
-          sexo:  u.sexo  || f.sexo,
-          email: u.email || f.email,
-        }));
-        setCpfStatus('encontrado');
-        setErros(e => ({ ...e, cpf: 'CPF já cadastrado no sistema' }));
-      } catch (err: unknown) {
-        const status = (err as { response?: { status: number } }).response?.status;
-        if (status === 404) {
-          setCpfStatus('livre');
-          setErros(e => ({ ...e, cpf: '' }));
-        } else {
-          setCpfStatus('invalido');
-        }
+  // Resetar erros enquanto digita
+  setErros(e => ({ ...e, cpf: '' }));
+
+  // Menos de 11 dígitos — ainda digitando, sem validar
+  if (limpo.length < 11) {
+    setCpfStatus(limpo.length > 0 ? 'digitando' : 'idle');
+    return;
+  }
+
+  // CPF completo (11 dígitos) — agora sim validar
+  if (!validarCPF(limpo)) {
+    setCpfStatus('invalido');
+    setErros(e => ({ ...e, cpf: 'CPF inválido — verifique os dígitos' }));
+    return;
+  }
+
+  // CPF válido — verificar no banco com debounce
+  setCpfStatus('verificando');
+
+  cpfTimer.current = setTimeout(async () => {
+    try {
+      const { data } = await api.get(`/auth/cpf/${limpo}`);
+      const u = data.data;
+      setForm(f => ({
+        ...f,
+        nome:  u.nome  || f.nome,
+        email: u.email || f.email,
+        idade: u.idade ? String(u.idade) : f.idade,
+        sexo:  u.sexo  || f.sexo,
+      }));
+      setCpfStatus('cadastrado');
+      setErros(e => ({ ...e, cpf: 'CPF já cadastrado no sistema' }));
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 404) {
+        setCpfStatus('livre');
+        setErros(e => ({ ...e, cpf: '' }));
+      } else {
+        setCpfStatus('invalido');
+        setErros(e => ({ ...e, cpf: 'Erro ao verificar CPF' }));
       }
-    }, 600);
-  };
+    }
+  }, 500);
+};
 
-  // ── Validação ──────────────────────────────────────────────
+  // ── Validação do form ─────────────────────────────────────
   const validar = (): boolean => {
-    const e: Partial<FormData> = {};
+    const e: Partial<Record<keyof FormData, string>> = {};
     if (!form.nome.trim())  e.nome  = 'Nome obrigatório';
-    if (!form.email.trim()) e.email = 'Email obrigatório';
-    if (!form.cpf.trim())   e.cpf   = 'CPF obrigatório';
+    if (!form.email.trim()) e.email = 'E-mail obrigatório';
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'E-mail inválido';
+    if (!form.cpf)          e.cpf   = 'CPF obrigatório';
     else if (!validarCPF(limparCPF(form.cpf))) e.cpf = 'CPF inválido';
-    if (cpfStatus === 'encontrado') e.cpf = 'CPF já cadastrado';
-    if (!form.senha) e.senha = 'Senha obrigatória';
+    else if (cpfStatus === 'cadastrado') e.cpf = 'CPF já cadastrado';
+    if (!form.senha)        e.senha = 'Senha obrigatória';
     else if (form.senha.length < 6) e.senha = 'Mínimo 6 caracteres';
     if (form.senha !== form.confirmarSenha) e.confirmarSenha = 'Senhas não coincidem';
     setErros(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     if (!validar()) return;
     setSalvando(true);
     setErroGeral('');
     try {
       await api.post('/auth/usuarios', {
-        nome:  form.nome,
-        email: form.email,
+        nome:  form.nome.trim(),
+        email: form.email.trim(),
         cpf:   limparCPF(form.cpf),
         senha: form.senha,
         idade: form.idade ? Number(form.idade) : null,
         sexo:  form.sexo  || null,
         role:  form.role,
       });
-      setSucesso(`Usuário ${form.nome} cadastrado com sucesso!`);
+      setSucesso(`✅ Usuário "${form.nome}" cadastrado com sucesso!`);
       setForm(vazio);
       setCpfStatus('idle');
+      setTimeout(() => setSucesso(''), 5000);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { erro?: string } } }).response?.data?.erro;
       setErroGeral(msg || 'Erro ao cadastrar usuário');
@@ -124,55 +142,113 @@ export function CadastroUsuario({ onVoltar }: Props) {
     }
   };
 
-  const cpfIndicador = {
-    idle:       { cor: '#E0C9A8', texto: '',                          emoji: '' },
-    buscando:   { cor: '#FCD34D', texto: 'Verificando CPF...',        emoji: '⏳' },
-    encontrado: { cor: '#EF4444', texto: 'CPF já cadastrado',         emoji: '❌' },
-    livre:      { cor: '#10B981', texto: 'CPF disponível',            emoji: '✅' },
-    invalido:   { cor: '#EF4444', texto: 'CPF inválido',              emoji: '⚠️' },
-  }[cpfStatus];
+  const limpar = () => {
+    setForm(vazio);
+    setCpfStatus('idle');
+    setErros({});
+    setErroGeral('');
+    setSucesso('');
+  };
+
+  // ── Config visual por status ──────────────────────────────
+  const cpfConfig: Record<CPFStatus, { cor: string; bg: string; texto: string; emoji: string }> = {
+    idle:        { cor: '#E0C9A8', bg: 'transparent',  texto: '',                           emoji: '' },
+    digitando:   { cor: '#FCD34D', bg: '#FFFBEB',      texto: 'Digite o CPF completo',       emoji: '✏️' },
+    invalido:    { cor: '#EF4444', bg: '#FEF2F2',      texto: 'CPF inválido',                emoji: '❌' },
+    verificando: { cor: '#6366F1', bg: '#EEF2FF',      texto: 'Verificando...',              emoji: '🔍' },
+    livre:       { cor: '#10B981', bg: '#ECFDF5',      texto: 'CPF disponível',              emoji: '✅' },
+    cadastrado:  { cor: '#EF4444', bg: '#FEF2F2',      texto: 'CPF já cadastrado',           emoji: '⚠️' },
+  };
+
+  const cfg = cpfConfig[cpfStatus];
+  const bloqueado = cpfStatus === 'cadastrado' || cpfStatus === 'invalido';
 
   return (
     <div style={s.page}>
       <div style={s.card}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={s.header}>
           <button onClick={onVoltar} style={s.btnVoltar}>← Voltar</button>
           <h2 style={s.titulo}>👤 Cadastrar Usuário</h2>
+          <div style={{ width: 70 }} />
         </div>
 
-        <form onSubmit={handleSubmit} style={s.form}>
+        <form onSubmit={handleSubmit} style={s.form} noValidate>
 
-          {sucesso && <div style={s.sucesso}>✅ {sucesso}</div>}
-          {erroGeral && <div style={s.erro}>⚠️ {erroGeral}</div>}
+          {sucesso  && <div style={s.boxSucesso}>{sucesso}</div>}
+          {erroGeral && <div style={s.boxErro}>⚠️ {erroGeral}</div>}
 
-          {/* CPF — campo principal com busca automática */}
+          {/* ── CPF ── */}
           <div style={s.campo}>
-            <label style={s.label}>
-              CPF *
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={s.label}>CPF *</label>
               {cpfStatus !== 'idle' && (
-                <span style={{ ...s.cpfTag, borderColor: cpfIndicador.cor, color: cpfIndicador.cor }}>
-                  {cpfIndicador.emoji} {cpfIndicador.texto}
+                <span style={{
+                  fontSize: '0.72rem', fontWeight: 700, padding: '2px 10px',
+                  borderRadius: '999px', border: `1px solid ${cfg.cor}`,
+                  color: cfg.cor, background: cfg.bg,
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: 'flex', alignItems: 'center', gap: '0.3rem',
+                }}>
+                  {cfg.emoji} {cfg.texto}
                 </span>
               )}
-            </label>
-            <input
-              style={{ ...s.input, borderColor: erros.cpf ? '#EF4444' : cpfIndicador.cor }}
-              placeholder="000.000.000-00"
-              value={form.cpf}
-              onChange={e => handleCPF(e.target.value)}
-              maxLength={14}
-            />
+            </div>
+
+            {/* Barra de progresso */}
+            <div style={{ height: 3, background: '#F0E4CC', borderRadius: '999px', marginBottom: '0.4rem', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: '999px',
+                background: cfg.cor,
+                width: `${Math.min((limparCPF(form.cpf).length / 11) * 100, 100)}%`,
+                transition: 'width 0.2s ease, background 0.3s ease',
+              }} />
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{
+                  ...s.input,
+                  borderColor: erros.cpf ? '#EF4444' : cfg.cor,
+                  paddingRight: '2.5rem',
+                  background: cfg.bg !== 'transparent' ? cfg.bg : '#FFFDF8',
+                  transition: 'border-color 0.2s, background 0.2s',
+                }}
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={e => handleCPF(e.target.value)}
+                maxLength={14}
+                autoFocus
+              />
+              {/* Ícone de status dentro do input */}
+              {cpfStatus !== 'idle' && (
+                <span style={{
+                  position: 'absolute', right: '0.75rem', top: '50%',
+                  transform: 'translateY(-50%)', fontSize: '1rem',
+                  pointerEvents: 'none',
+                }}>
+                  {cpfStatus === 'verificando' ? '⏳' : cfg.emoji}
+                </span>
+              )}
+            </div>
             {erros.cpf && <span style={s.erroField}>{erros.cpf}</span>}
-            {cpfStatus === 'encontrado' && (
-              <div style={s.cpfInfo}>
-                ℹ️ Dados preenchidos automaticamente a partir do CPF encontrado
+
+            {/* Info quando CPF já existe */}
+            {cpfStatus === 'cadastrado' && (
+              <div style={s.infoBox}>
+                ℹ️ Este CPF já está cadastrado. Os dados foram preenchidos automaticamente.
+              </div>
+            )}
+            {/* Info quando CPF é novo */}
+            {cpfStatus === 'livre' && (
+              <div style={{ ...s.infoBox, background: '#ECFDF5', borderColor: '#6EE7B7', color: '#065F46' }}>
+                ✅ CPF disponível — preencha os dados abaixo para cadastrar.
               </div>
             )}
           </div>
 
-          {/* Nome */}
+          {/* ── Nome ── */}
           <div style={s.campo}>
             <label style={s.label}>Nome completo *</label>
             <input
@@ -180,11 +256,12 @@ export function CadastroUsuario({ onVoltar }: Props) {
               placeholder="João da Silva"
               value={form.nome}
               onChange={e => set('nome', e.target.value)}
+              disabled={cpfStatus === 'cadastrado'}
             />
             {erros.nome && <span style={s.erroField}>{erros.nome}</span>}
           </div>
 
-          {/* Idade e Sexo lado a lado */}
+          {/* ── Idade + Sexo ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div style={s.campo}>
               <label style={s.label}>Idade</label>
@@ -194,6 +271,7 @@ export function CadastroUsuario({ onVoltar }: Props) {
                 placeholder="Ex: 30"
                 value={form.idade}
                 onChange={e => set('idade', e.target.value)}
+                disabled={cpfStatus === 'cadastrado'}
               />
             </div>
             <div style={s.campo}>
@@ -202,6 +280,7 @@ export function CadastroUsuario({ onVoltar }: Props) {
                 style={s.input}
                 value={form.sexo}
                 onChange={e => set('sexo', e.target.value)}
+                disabled={cpfStatus === 'cadastrado'}
               >
                 <option value="">Selecione</option>
                 <option value="M">Masculino</option>
@@ -211,7 +290,7 @@ export function CadastroUsuario({ onVoltar }: Props) {
             </div>
           </div>
 
-          {/* Email */}
+          {/* ── E-mail ── */}
           <div style={s.campo}>
             <label style={s.label}>E-mail *</label>
             <input
@@ -220,35 +299,77 @@ export function CadastroUsuario({ onVoltar }: Props) {
               placeholder="joao@email.com"
               value={form.email}
               onChange={e => set('email', e.target.value)}
+              disabled={cpfStatus === 'cadastrado'}
             />
             {erros.email && <span style={s.erroField}>{erros.email}</span>}
           </div>
 
-          {/* Senha e confirmar */}
+          {/* ── Senhas ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div style={s.campo}>
               <label style={s.label}>Senha *</label>
-              <input
-                style={{ ...s.input, borderColor: erros.senha ? '#EF4444' : '#E0C9A8' }}
-                type="password" placeholder="Mínimo 6 caracteres"
-                value={form.senha}
-                onChange={e => set('senha', e.target.value)}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  style={{ ...s.input, borderColor: erros.senha ? '#EF4444' : '#E0C9A8', paddingRight: '2.5rem' }}
+                  type={mostrarSenha ? 'text' : 'password'}
+                  placeholder="Mín. 6 caracteres"
+                  value={form.senha}
+                  onChange={e => set('senha', e.target.value)}
+                  disabled={cpfStatus === 'cadastrado'}
+                />
+                <button type="button" onClick={() => setMostrarSenha(v => !v)} style={s.btnOlho}>
+                  {mostrarSenha ? '🙈' : '👁️'}
+                </button>
+              </div>
               {erros.senha && <span style={s.erroField}>{erros.senha}</span>}
+              {/* Força da senha */}
+              {form.senha && cpfStatus !== 'cadastrado' && (
+                <div style={{ marginTop: '0.35rem' }}>
+                  <div style={{ height: 3, background: '#F0E4CC', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: '999px', transition: 'width 0.3s, background 0.3s',
+                      width: form.senha.length >= 10 ? '100%' : form.senha.length >= 6 ? '60%' : '25%',
+                      background: form.senha.length >= 10 ? '#10B981' : form.senha.length >= 6 ? '#F59E0B' : '#EF4444',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.68rem', color: form.senha.length >= 10 ? '#10B981' : form.senha.length >= 6 ? '#F59E0B' : '#EF4444', fontFamily: "'DM Sans', sans-serif" }}>
+                    {form.senha.length >= 10 ? 'Senha forte' : form.senha.length >= 6 ? 'Senha média' : 'Senha fraca'}
+                  </span>
+                </div>
+              )}
             </div>
+
             <div style={s.campo}>
               <label style={s.label}>Confirmar senha *</label>
-              <input
-                style={{ ...s.input, borderColor: erros.confirmarSenha ? '#EF4444' : '#E0C9A8' }}
-                type="password" placeholder="Repita a senha"
-                value={form.confirmarSenha}
-                onChange={e => set('confirmarSenha', e.target.value)}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  style={{
+                    ...s.input,
+                    paddingRight: '2.5rem',
+                    borderColor: erros.confirmarSenha ? '#EF4444'
+                      : form.confirmarSenha && form.senha === form.confirmarSenha ? '#10B981'
+                      : '#E0C9A8',
+                  }}
+                  type={mostrarConfirmar ? 'text' : 'password'}
+                  placeholder="Repita a senha"
+                  value={form.confirmarSenha}
+                  onChange={e => set('confirmarSenha', e.target.value)}
+                  disabled={cpfStatus === 'cadastrado'}
+                />
+                <button type="button" onClick={() => setMostrarConfirmar(v => !v)} style={s.btnOlho}>
+                  {mostrarConfirmar ? '🙈' : '👁️'}
+                </button>
+              </div>
               {erros.confirmarSenha && <span style={s.erroField}>{erros.confirmarSenha}</span>}
+              {form.confirmarSenha && form.senha === form.confirmarSenha && (
+                <span style={{ fontSize: '0.72rem', color: '#10B981', fontFamily: "'DM Sans', sans-serif" }}>
+                  ✓ Senhas coincidem
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Perfil */}
+          {/* ── Perfil ── */}
           <div style={s.campo}>
             <label style={s.label}>Perfil de acesso</label>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -259,13 +380,17 @@ export function CadastroUsuario({ onVoltar }: Props) {
                 <button
                   key={p.val}
                   type="button"
-                  onClick={() => set('role', p.val)}
+                  onClick={() => !bloqueado && set('role', p.val)}
+                  disabled={bloqueado}
                   style={{
                     flex: 1, padding: '0.75rem',
                     border: `2px solid ${form.role === p.val ? '#C8822A' : '#E0C9A8'}`,
                     borderRadius: '0.5rem',
                     background: form.role === p.val ? '#FFF3E0' : '#FFFBF5',
-                    cursor: 'pointer', textAlign: 'left',
+                    cursor: bloqueado ? 'not-allowed' : 'pointer',
+                    opacity: bloqueado ? 0.5 : 1,
+                    textAlign: 'left',
+                    transition: 'all 0.15s',
                   }}
                 >
                   <div style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: '0.88rem', color: form.role === p.val ? '#C8822A' : '#374151' }}>
@@ -279,23 +404,28 @@ export function CadastroUsuario({ onVoltar }: Props) {
             </div>
           </div>
 
-          {/* Botões */}
+          {/* ── Botões ── */}
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={() => setForm(vazio)} style={s.btnSecundario}>
-              Limpar
+            <button
+              type="button"
+              onClick={limpar}
+              style={s.btnSecundario}
+            >
+              🗑 Limpar
             </button>
             <button
               type="submit"
-              disabled={salvando || cpfStatus === 'encontrado' || cpfStatus === 'invalido'}
+              disabled={salvando || bloqueado || cpfStatus === 'verificando'}
               style={{
                 ...s.btnPrimario,
-                opacity: (salvando || cpfStatus === 'encontrado' || cpfStatus === 'invalido') ? 0.6 : 1,
-                cursor: (salvando || cpfStatus === 'encontrado' || cpfStatus === 'invalido') ? 'not-allowed' : 'pointer',
+                opacity: (salvando || bloqueado || cpfStatus === 'verificando') ? 0.55 : 1,
+                cursor: (salvando || bloqueado || cpfStatus === 'verificando') ? 'not-allowed' : 'pointer',
               }}
             >
-              {salvando ? 'Cadastrando...' : '✓ Cadastrar Usuário'}
+              {salvando ? '⏳ Cadastrando...' : '✓ Cadastrar Usuário'}
             </button>
           </div>
+
         </form>
       </div>
     </div>
@@ -303,20 +433,20 @@ export function CadastroUsuario({ onVoltar }: Props) {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: '100vh', background: '#FDF6EC', padding: '2rem', fontFamily: "'DM Sans', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'flex-start' },
-  card: { background: '#FFFBF5', border: '1px solid #E8D5B0', borderRadius: '1rem', width: '100%', maxWidth: 600, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' },
-  header: { display: 'flex', alignItems: 'center', gap: '1rem', padding: '1.25rem 1.5rem', borderBottom: '1px solid #F0E4CC', background: '#2C1A0E', borderRadius: '1rem 1rem 0 0' },
-  btnVoltar: { background: 'transparent', border: '1px solid #5C3D2E', color: '#A07850', borderRadius: '0.4rem', padding: '0.35rem 0.75rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '0.82rem' },
-  titulo: { margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '1.2rem', color: '#F5DEB3' },
-  form: { padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' },
-  campo: { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
-  label: { fontSize: '0.75rem', fontWeight: 700, color: '#7A5C4E', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' },
-  input: { padding: '0.65rem 0.85rem', border: '1.5px solid #E0C9A8', borderRadius: '0.5rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.95rem', color: '#2C1A0E', background: '#FFFDF8', outline: 'none', width: '100%', boxSizing: 'border-box' as const },
-  erroField: { fontSize: '0.75rem', color: '#EF4444', marginTop: '0.15rem' },
-  cpfTag: { fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', border: '1px solid', marginLeft: '0.4rem' },
-  cpfInfo: { fontSize: '0.78rem', color: '#0EA5E9', background: '#EFF6FF', border: '1px solid #BAE6FD', borderRadius: '0.4rem', padding: '0.4rem 0.7rem', marginTop: '0.25rem' },
-  sucesso: { background: '#ECFDF5', border: '1px solid #6EE7B7', color: '#065F46', borderRadius: '0.5rem', padding: '0.65rem 0.85rem', fontSize: '0.875rem' },
-  erro: { background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '0.5rem', padding: '0.65rem 0.85rem', fontSize: '0.875rem' },
-  btnPrimario: { flex: 2, padding: '0.75rem', background: '#C8822A', color: '#fff', border: 'none', borderRadius: '0.5rem', fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: '0.95rem' },
-  btnSecundario: { flex: 1, padding: '0.75rem', background: 'transparent', border: '1.5px solid #E0C9A8', borderRadius: '0.5rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", color: '#8B6F5E' },
+  page:        { minHeight: '100vh', background: '#FDF6EC', padding: '2rem', fontFamily: "'DM Sans', sans-serif", display: 'flex', justifyContent: 'center', alignItems: 'flex-start' },
+  card:        { background: '#FFFBF5', border: '1px solid #E8D5B0', borderRadius: '1rem', width: '100%', maxWidth: 600, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' },
+  header:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid #F0E4CC', background: '#2C1A0E', borderRadius: '1rem 1rem 0 0' },
+  btnVoltar:   { background: 'transparent', border: '1px solid #5C3D2E', color: '#A07850', borderRadius: '0.4rem', padding: '0.35rem 0.75rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '0.82rem' },
+  titulo:      { margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '1.2rem', color: '#F5DEB3' },
+  form:        { padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' },
+  campo:       { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
+  label:       { fontSize: '0.75rem', fontWeight: 700, color: '#7A5C4E', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  input:       { padding: '0.65rem 0.85rem', border: '1.5px solid #E0C9A8', borderRadius: '0.5rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.95rem', color: '#2C1A0E', background: '#FFFDF8', outline: 'none', width: '100%', boxSizing: 'border-box' as const, transition: 'border-color 0.2s' },
+  erroField:   { fontSize: '0.75rem', color: '#EF4444' },
+  infoBox:     { fontSize: '0.78rem', color: '#0EA5E9', background: '#EFF6FF', border: '1px solid #BAE6FD', borderRadius: '0.4rem', padding: '0.5rem 0.75rem', marginTop: '0.25rem' },
+  boxSucesso:  { background: '#ECFDF5', border: '1px solid #6EE7B7', color: '#065F46', borderRadius: '0.5rem', padding: '0.65rem 0.85rem', fontSize: '0.875rem', fontWeight: 600 },
+  boxErro:     { background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '0.5rem', padding: '0.65rem 0.85rem', fontSize: '0.875rem' },
+  btnPrimario: { flex: 2, padding: '0.75rem', background: '#C8822A', color: '#fff', border: 'none', borderRadius: '0.5rem', fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: '0.95rem', transition: 'opacity 0.15s' },
+  btnSecundario:{ flex: 1, padding: '0.75rem', background: 'transparent', border: '1.5px solid #E0C9A8', borderRadius: '0.5rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", color: '#8B6F5E', fontSize: '0.88rem' },
+  btnOlho:     { position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', padding: 0 },
 };

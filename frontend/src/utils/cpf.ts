@@ -12,13 +12,30 @@ export function formatarCPF(valor: string): string {
 
 export function validarCPF(cpf: string): boolean {
   const c = limparCPF(cpf);
+
+  // Deve ter exatamente 11 dígitos
   if (c.length !== 11) return false;
+
+  // Rejeitar sequências repetidas (111.111.111-11 etc)
   if (/^(\d)\1{10}$/.test(c)) return false;
-  const calc = (x: number) => {
-    let sum = 0;
-    for (let i = 0; i < x; i++) sum += parseInt(c[i]) * (x + 1 - i);
-    const r = (sum * 10) % 11;
-    return r === 10 || r === 11 ? 0 : r;
-  };
-  return calc(9) === parseInt(c[9]) && calc(10) === parseInt(c[10]);
+
+  // Calcular primeiro dígito verificador
+  let soma = 0;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(c[i]) * (10 - i);
+  }
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(c[9])) return false;
+
+  // Calcular segundo dígito verificador
+  soma = 0;
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(c[i]) * (11 - i);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(c[10])) return false;
+
+  return true;
 }
