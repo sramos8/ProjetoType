@@ -61,6 +61,7 @@ export const criarProduto = (req: Request, res: Response): void => {
         estoque: Number(estoque ?? 0),
         descricao: descricao?.trim() ?? '',
         disponivel: disponivel ?? true,
+        codigoBarras: null, // ← novo campo
         criadoEm: now,
         atualizadoEm: now,
     };
@@ -120,4 +121,18 @@ export const estatisticas = (req: Request, res: Response): void => {
         porCategoria: db.prepare('SELECT categoria, COUNT(*) AS c FROM produtos GROUP BY categoria').all() as { categoria: string, c: number }[],
     }
     res.json({ data: stats });
+};
+
+// Adicione esta função:
+export const buscarPorCodigoBarras = (req: Request, res: Response): void => {
+  const { codigo } = req.params;
+  const produto = db.prepare(
+    'SELECT * FROM produtos WHERE codigoBarras = ? AND disponivel = 1'
+  ).get(codigo) as Record<string, unknown> | undefined;
+
+  if (!produto) {
+    res.status(404).json({ erro: `Produto não encontrado para o código: ${codigo}` });
+    return;
+  }
+  res.json({ data: rowToProduto(produto) });
 };

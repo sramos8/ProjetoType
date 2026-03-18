@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS vendas (
   CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(criadoEm);
 `);
 
+// Adicione após as outras migrações try/catch:
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN codigoBarras TEXT`);
+} catch { /* coluna já existe */ }
+
+try {
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_produtos_barcode ON produtos(codigoBarras) WHERE codigoBarras IS NOT NULL`);
+} catch { /* índice já existe */ }
 // Criar admin padrão se não existir
 const adminExiste = db.prepare("SELECT id FROM usuarios WHERE email = 'admin@padaria.com'").get();
 if (!adminExiste) {

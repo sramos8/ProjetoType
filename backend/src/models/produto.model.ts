@@ -6,6 +6,7 @@ export interface Produto {
   estoque: number;
   descricao: string;
   disponivel: boolean;
+  codigoBarras: string | null;  // ← novo
   criadoEm: string;
   atualizadoEm: string;
 }
