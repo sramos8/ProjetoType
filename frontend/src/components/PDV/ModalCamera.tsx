@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useCameraBarcode } from '../../hooks/useCameraBarcode';
 import { useResponsive } from '../../hooks/useResponsive';
 
