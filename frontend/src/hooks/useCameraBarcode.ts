@@ -21,29 +21,44 @@ export function useCameraBarcode({ videoRef, ativo, onLeitura, onErro }: UseCame
   useEffect(() => {
     if (!ativo || !videoRef.current) { parar(); return; }
 
+    // ── Verificar se câmera está disponível ───────────────
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      onErro?.(
+        'Câmera indisponível. A câmera requer HTTPS ou localhost. ' +
+        'Acesse via https:// para usar este recurso.'
+      );
+      return;
+    }
+
     const reader = new BrowserMultiFormatReader();
     readerRef.current = reader;
 
     reader.decodeFromVideoDevice(
-      null, // usa câmera traseira por padrão
+      null,
       videoRef.current,
       (resultado, erro) => {
         if (resultado) {
           const codigo = resultado.getText();
-
-          // Debounce — evita leitura duplicada do mesmo código
           if (codigo === ultimoRef.current && cooldownRef.current) return;
           ultimoRef.current   = codigo;
           cooldownRef.current = true;
           setTimeout(() => { cooldownRef.current = false; }, 2000);
-
           onLeitura(codigo);
         } else if (erro && !(erro instanceof NotFoundException)) {
-          // NotFoundException é normal quando não há código na câmera
+          // NotFoundException é normal — ignora
         }
       }
     ).catch(e => {
-      onErro?.(e?.message || 'Erro ao acessar câmera');
+      const msg = e?.message || '';
+      if (msg.includes('getUserMedia') || msg.includes('mediaDevices')) {
+        onErro?.('Câmera requer HTTPS. Configure SSL no servidor para usar a câmera.');
+      } else if (msg.includes('Permission') || msg.includes('permission')) {
+        onErro?.('Permissão de câmera negada. Permita o acesso nas configurações do navegador.');
+      } else if (msg.includes('NotFound') || msg.includes('Devices')) {
+        onErro?.('Nenhuma câmera encontrada neste dispositivo.');
+      } else {
+        onErro?.(msg || 'Erro ao acessar câmera');
+      }
     });
 
     return parar;
