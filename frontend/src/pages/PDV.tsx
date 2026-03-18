@@ -7,6 +7,9 @@ import { Carrinho } from '../components/PDV/Carrinho';
 import { ModalPagamento } from '../components/PDV/ModalPagamento';
 import { CATEGORIAS } from '../types';
 import { useResponsive } from '../hooks/useResponsive';
+import { useSom } from '../hooks/useSom';
+import { useBarcode } from '../hooks/useBarcode';
+import { ModalCamera } from '../components/PDV/ModalCamera';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -23,6 +26,11 @@ export function PDV() {
   const [sucesso, setSucesso] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+
+  const { tocar } = useSom();
+  const [barcodeAtivo, setBarcodeAtivo] = useState(true);
+  const [barcodeMsg, setBarcodeMsg]     = useState('');
+  const [cameraAberta, setCameraAberta] = useState(false);
 
   const iniciarVenda = useCallback(async () => {
     const v = await vendaService.criar();
@@ -47,6 +55,7 @@ export function PDV() {
     try {
       const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
       setVenda(v);
+      tocar('produto');  // ← som ao adicionar pelo clique também
       setErro('');
       // No mobile, abre o carrinho ao adicionar primeiro item
       if (isMobile && v.itens.length === 1) setCarrinhoAberto(true);
@@ -82,6 +91,7 @@ export function PDV() {
   const concluirVenda = async (forma: string, valorPago: number, obs: string) => {
     if (!venda) return;
     await vendaService.concluir(venda.id, forma, valorPago, obs);
+    tocar('venda');  // ← acorde de sucesso
     setModalPagamento(false);
     setCarrinhoAberto(false);
     setSucesso(`Venda #${venda.id.slice(0, 8)} concluída! ${fmt(valorPago - venda.valorTotal)} de troco.`);
@@ -90,6 +100,55 @@ export function PDV() {
     setTimeout(() => setSucesso(''), 5000);
   };
 
+  // Hook de leitor de código de barras
+useBarcode({
+  ativo: barcodeAtivo && !modalPagamento,
+  onLeitura: async (codigo) => {
+    setBarcodeMsg('');
+    try {
+      // Busca produto pelo código de barras
+      const { data: produto } = await (await fetch(
+        `${import.meta.env.VITE_API_URL || '/api'}/produtos/barcode/${encodeURIComponent(codigo)}`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      )).json() as { data: any };
+
+      if (!produto) {
+        tocar('erro');
+        setBarcodeMsg(`❌ Código ${codigo} não encontrado`);
+        setTimeout(() => setBarcodeMsg(''), 3000);
+        return;
+      }
+
+      if (!venda) return;
+      const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
+      setVenda(v);
+      tocar('produto');
+      setBarcodeMsg(`✅ ${produto.nome} adicionado`);
+      setTimeout(() => setBarcodeMsg(''), 2000);
+
+    } catch {
+      tocar('erro');
+      setBarcodeMsg(`❌ Código ${codigo} não encontrado`);
+      setTimeout(() => setBarcodeMsg(''), 3000);
+    }
+  },
+});
+
+const handleCameraLeitura = useCallback(async (codigo: string) => {
+  try {
+    const produto = await produtoService.buscarPorBarcode(codigo);
+    if (!venda) return;
+    const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
+    setVenda(v);
+    tocar('produto');
+    setSucesso(`✅ ${produto.nome} adicionado via câmera`);
+    setTimeout(() => setSucesso(''), 2500);
+  } catch {
+    tocar('erro');
+    setErro(`❌ Código ${codigo} não encontrado`);
+    setTimeout(() => setErro(''), 3000);
+  }
+}, [venda, tocar]);
   const totalItens = venda?.itens.reduce((acc, i) => acc + i.quantidade, 0) ?? 0;
 
   return (
@@ -151,6 +210,80 @@ export function PDV() {
             {erro} ✕
           </div>
         )}
+        {/* Grid de códigos de barras */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: barcodeAtivo ? '#ECFDF5' : '#F5F5F5',
+          border: `1px solid ${barcodeAtivo ? '#6EE7B7' : '#E0C9A8'}`,
+          borderRadius: '0.5rem', padding: '0.5rem 0.85rem',
+          transition: 'all 0.2s',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>📷</span>
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.8rem', color: barcodeAtivo ? '#065F46' : '#8B6F5E', fontWeight: 600 }}>
+              {barcodeAtivo ? 'Leitor de código de barras ativo' : 'Leitor desativado'}
+            </span>
+            {barcodeMsg && (
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.78rem', color: barcodeMsg.startsWith('✅') ? '#065F46' : '#B91C1C', marginLeft: '0.5rem' }}>
+                {barcodeMsg}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setBarcodeAtivo(v => !v)}
+            style={{
+              padding: '0.25rem 0.75rem', border: `1px solid ${barcodeAtivo ? '#10B981' : '#E0C9A8'}`,
+              borderRadius: '999px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700,
+              background: barcodeAtivo ? '#10B981' : '#FFFBF5',
+              color: barcodeAtivo ? '#fff' : '#8B6F5E',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            {barcodeAtivo ? 'ON' : 'OFF'}
+          </button>
+        </div>
+
+            {/* Banner do leitor — troque pelo código abaixo */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: barcodeAtivo ? '#ECFDF5' : '#F5F5F5',
+                border: `1px solid ${barcodeAtivo ? '#6EE7B7' : '#E0C9A8'}`,
+                borderRadius: '0.5rem', padding: '0.5rem 0.85rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '1rem', flexShrink: 0 }}>📷</span>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.78rem', color: barcodeAtivo ? '#065F46' : '#8B6F5E', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {barcodeMsg || (barcodeAtivo ? 'Leitor USB/BT ativo — aponte para a tela' : 'Leitor USB/BT desativado')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0, marginLeft: '0.5rem' }}>
+                  {/* Botão câmera */}
+                  <button
+                    onClick={() => setCameraAberta(true)}
+                    title="Usar câmera do celular"
+                    style={{ padding: '0.3rem 0.75rem', border: '1px solid #BAE6FD', borderRadius: '999px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: '#EFF6FF', color: '#0EA5E9', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    📱 Câmera
+                  </button>
+
+                  {/* Toggle USB */}
+                  <button
+                    onClick={() => setBarcodeAtivo(v => !v)}
+                    style={{ padding: '0.3rem 0.65rem', border: `1px solid ${barcodeAtivo ? '#10B981' : '#E0C9A8'}`, borderRadius: '999px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: barcodeAtivo ? '#10B981' : '#FFFBF5', color: barcodeAtivo ? '#fff' : '#8B6F5E', fontFamily: "'DM Sans', sans-serif" }}
+                  >
+                    USB {barcodeAtivo ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal câmera */}
+              <ModalCamera
+                aberto={cameraAberta}
+                onLeitura={handleCameraLeitura}
+                onFechar={() => setCameraAberta(false)}
+              />
+
 
         {/* Grid de produtos */}
         <div style={{

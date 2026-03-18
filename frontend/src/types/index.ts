@@ -6,6 +6,7 @@ export interface Produto {
   categoria: Categoria;
   preco: number;
   estoque: number;
+  codigoBarras: string | null;
   descricao: string;
   disponivel: boolean;
   criadoEm: string;

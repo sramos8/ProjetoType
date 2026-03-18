@@ -25,4 +25,8 @@ export const produtoService = {
     const { data } = await api.get<{ data: Estatisticas }>('/produtos/stats');
     return data.data;
   },
+  buscarPorBarcode: async (codigo: string) => {
+    const { data } = await api.get<{ data: Produto }>(`/produtos/barcode/${encodeURIComponent(codigo)}`);
+    return data.data;
+  },
 };
