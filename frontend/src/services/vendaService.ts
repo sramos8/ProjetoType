@@ -47,4 +47,12 @@ export const vendaService = {
     });
     return data.data;
   },
+  // Adicione ao vendaService:
+alterarPreco: async (vendaId: string, itemId: string, novoPreco: number) => {
+  const { data } = await api.put<{ data: Venda }>(
+    `/vendas/${vendaId}/itens/${itemId}/preco`,
+    { novoPreco }
+  );
+  return data.data;
+},
 };

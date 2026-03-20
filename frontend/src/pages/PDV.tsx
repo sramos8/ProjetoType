@@ -150,6 +150,16 @@ const handleCameraLeitura = useCallback(async (codigo: string) => {
   }
 }, [venda, tocar]);
   const totalItens = venda?.itens.reduce((acc, i) => acc + i.quantidade, 0) ?? 0;
+const alterarPrecoItem = async (itemId: string, novoPreco: number) => {
+  if (!venda) return;
+  try {
+    const v = await vendaService.alterarPreco(venda.id, itemId, novoPreco);
+    setVenda(v);
+    tocar('produto');
+  } catch (e: unknown) {
+    setErro(e instanceof Error ? e.message : 'Erro ao alterar preço');
+  }
+};
 
   return (
     <div style={{
@@ -339,6 +349,7 @@ const handleCameraLeitura = useCallback(async (codigo: string) => {
               venda={venda}
               onRemover={removerItem}
               onAlterarQtd={alterarQtd}
+              onAlterarPreco={alterarPrecoItem}   // ← novo
               onConcluir={() => setModalPagamento(true)}
               onCancelar={cancelarVenda}
             />
@@ -415,6 +426,7 @@ const handleCameraLeitura = useCallback(async (codigo: string) => {
                   venda={venda}
                   onRemover={removerItem}
                   onAlterarQtd={alterarQtd}
+                  onAlterarPreco={alterarPrecoItem}   // ← novo
                   onConcluir={() => { setCarrinhoAberto(false); setModalPagamento(true); }}
                   onCancelar={cancelarVenda}
                 />

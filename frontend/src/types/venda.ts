@@ -9,6 +9,7 @@ export interface ItemVenda {
   quantidade: number;
   precoUnitario: number;
   subtotal: number;
+  precoOriginal?: number; // ← novo campo para armazenar o preço original do item, caso seja alterado
 }
 
 export interface Venda {
