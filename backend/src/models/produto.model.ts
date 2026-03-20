@@ -4,9 +4,11 @@ export interface Produto {
   categoria: 'pao' | 'bolo' | 'salgado' | 'doce' | 'bebida' | 'outro';
   preco: number;
   estoque: number;
+  estoqueMinimo: number;   // ← novo
   descricao: string;
   disponivel: boolean;
-  codigoBarras: string | null;  // ← novo
+  codigoBarras: string | null;
+  dataValidade: string | null;  // ← novo (YYYY-MM-DD)
   criadoEm: string;
   atualizadoEm: string;
 }

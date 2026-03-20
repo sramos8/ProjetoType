@@ -5,10 +5,12 @@ import type { Produto, CriarProdutoDTO, AtualizarProdutoDTO } from '../models/pr
 import { decodificarCodigoBalanca } from '../utils/codigoBalanca';
 
 function rowToProduto(row: Record<string, unknown>): Produto {
-    return {
-        ...(row as Omit<Produto, 'disponivel'>),
-        disponivel: row.disponivel === 1,
-    };
+  return {
+    ...(row as Omit<Produto, 'disponivel'>),
+    disponivel:    row.disponivel === 1,
+    dataValidade:  (row.dataValidade as string) || null,
+    estoqueMinimo: (row.estoqueMinimo as number) ?? 5,
+  };
 }
 
 export const listarProdutos = (req: Request, res: Response): void => {
@@ -47,7 +49,7 @@ export const buscarProduto = (req: Request, res: Response): void => {
 };
 
 export const criarProduto = (req: Request, res: Response): void => {
-  const { nome, categoria, preco, estoque, descricao, disponivel, codigoBarras }: CriarProdutoDTO = req.body;
+  const { nome, categoria, preco, estoque, estoqueMinimo, descricao, disponivel, codigoBarras, dataValidade }: CriarProdutoDTO = req.body;
 
   if (!nome || !categoria || preco === undefined) {
     res.status(400).json({ erro: 'Campos obrigatórios: nome, categoria, preco' });
@@ -59,22 +61,32 @@ export const criarProduto = (req: Request, res: Response): void => {
     id: uuidv4(),
     nome: nome.trim(),
     categoria,
-    preco: Number(preco),
-    estoque: Number(estoque ?? 0),
-    descricao: descricao ?? '',
-    disponivel: disponivel ?? true,
-    codigoBarras: codigoBarras?.trim() || null,  // ← garante que salva
-    criadoEm: now,
-    atualizadoEm: now,
+    preco:         Number(preco),
+    estoque:       Number(estoque ?? 0),
+    estoqueMinimo: Number(estoqueMinimo ?? 5),
+    descricao:     descricao ?? '',
+    disponivel:    disponivel ?? true,
+    codigoBarras:  codigoBarras?.trim() || null,
+    dataValidade:  dataValidade || null,
+    criadoEm:      now,
+    atualizadoEm:  now,
   };
 
   db.prepare(`
-    INSERT INTO produtos (id, nome, categoria, preco, estoque, descricao, disponivel, codigoBarras, criadoEm, atualizadoEm)
-    VALUES (@id, @nome, @categoria, @preco, @estoque, @descricao, @disponivel, @codigoBarras, @criadoEm, @atualizadoEm)
+    INSERT INTO produtos
+      (id, nome, categoria, preco, estoque, estoqueMinimo, descricao, disponivel, codigoBarras, dataValidade, criadoEm, atualizadoEm)
+    VALUES
+      (@id, @nome, @categoria, @preco, @estoque, @estoqueMinimo, @descricao, @disponivel, @codigoBarras, @dataValidade, @criadoEm, @atualizadoEm)
   `).run({ ...produto, disponivel: produto.disponivel ? 1 : 0 });
 
   res.status(201).json({ data: produto, mensagem: 'Produto criado com sucesso' });
 };
+
+// Atualize atualizarProduto — adicione nos permitidos:
+const permitidos = [
+  'nome', 'categoria', 'preco', 'estoque', 'estoqueMinimo',
+  'descricao', 'disponivel', 'codigoBarras', 'dataValidade'
+] as const;
 
 export const atualizarProduto = (req: Request, res: Response): void => {
   const existente = db.prepare('SELECT * FROM produtos WHERE id = ?').get(req.params.id);
@@ -188,4 +200,53 @@ export const buscarPorCodigoBarras = (req: Request, res: Response): void => {
   }
 
   res.json({ data: { ...rowToProduto(produto), ehCodigoBalanca: false } });
+};
+
+// Adicione esta nova função:
+export const alertas = (_req: Request, res: Response): void => {
+  const hoje = new Date().toISOString().split('T')[0];
+
+  // Data limite para alerta de vencimento (7 dias)
+  const limite = new Date();
+  limite.setDate(limite.getDate() + 7);
+  const dataLimite = limite.toISOString().split('T')[0];
+
+  const vencendo = db.prepare(`
+    SELECT * FROM produtos
+    WHERE dataValidade IS NOT NULL
+      AND dataValidade <= ?
+      AND disponivel = 1
+    ORDER BY dataValidade ASC
+  `).all(dataLimite) as Record<string, unknown>[];
+
+  const vencidos = db.prepare(`
+    SELECT * FROM produtos
+    WHERE dataValidade IS NOT NULL
+      AND dataValidade < ?
+      AND disponivel = 1
+  `).all(hoje) as Record<string, unknown>[];
+
+  const estoquesBaixos = db.prepare(`
+    SELECT * FROM produtos
+    WHERE estoque <= estoqueMinimo
+      AND estoque > 0
+      AND disponivel = 1
+    ORDER BY estoque ASC
+  `).all() as Record<string, unknown>[];
+
+  const semEstoque = db.prepare(`
+    SELECT * FROM produtos
+    WHERE estoque = 0
+      AND disponivel = 1
+  `).all() as Record<string, unknown>[];
+
+  res.json({
+    data: {
+      vencendo:      vencendo.map(rowToProduto),
+      vencidos:      vencidos.map(rowToProduto),
+      estoquesBaixos: estoquesBaixos.map(rowToProduto),
+      semEstoque:    semEstoque.map(rowToProduto),
+      totalAlertas:  vencendo.length + vencidos.length + estoquesBaixos.length + semEstoque.length,
+    }
+  });
 };

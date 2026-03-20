@@ -70,6 +70,16 @@ try {
   db.exec(`ALTER TABLE produtos ADD COLUMN codigoBarras TEXT`);
 } catch { /* coluna já existe */ }
 
+// Adicione após as outras migrações try/catch:
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN dataValidade TEXT`);
+} catch { /* já existe */ }
+
+try {
+  db.exec(`ALTER TABLE produtos ADD COLUMN estoqueMinimo INTEGER NOT NULL DEFAULT 5`);
+} catch { /* já existe */ }
+
+
 try {
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_produtos_barcode ON produtos(codigoBarras) WHERE codigoBarras IS NOT NULL`);
 } catch { /* índice já existe */ }
