@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import {
   BrowserMultiFormatReader,
-  BrowserBarcodeReader,
   NotFoundException,
   DecodeHintType,
   BarcodeFormat,

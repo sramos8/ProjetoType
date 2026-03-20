@@ -1,6 +1,5 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useCameraBarcode } from '../../hooks/useCameraBarcode';
-import { useResponsive } from '../../hooks/useResponsive';
 
 interface Props {
   aberto: boolean;
@@ -9,7 +8,6 @@ interface Props {
 }
 
 export function ModalCamera({ aberto, onLeitura, onFechar }: Props) {
-  const { isMobile } = useResponsive();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [erro, setErro]   = useState('');
   const [lido, setLido]   = useState('');
