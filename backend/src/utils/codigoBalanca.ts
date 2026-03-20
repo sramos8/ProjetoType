@@ -29,10 +29,10 @@ export function decodificarCodigoBalanca(codigo: string): DecodificacaoBalanca {
   }
 
   // Extrai partes do código
-  const prefixo      = limpo[0];                    // '2'
+ // const prefixo      = limpo[0];                    // '2'
   const codProduto   = limpo.slice(1, 6);            // 5 dígitos do produto
   const dadosValor   = limpo.slice(6, 11);           // 5 dígitos do valor/peso
-  const digitoVerif  = limpo[12];                    // dígito verificador
+  //const digitoVerif  = limpo[12];                    // dígito verificador
 
   // Detecta se é preço ou peso pelo padrão do código do produto
   // Prefixo 20-29: peso em gramas
