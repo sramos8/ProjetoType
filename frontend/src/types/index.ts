@@ -6,9 +6,14 @@ export interface Produto {
   categoria: Categoria;
   preco: number;
   estoque: number;
-  codigoBarras: string | null;
   descricao: string;
   disponivel: boolean;
+  codigoBarras: string | null;
+  // Campos retornados quando é código de balança:
+  precoSugerido?: number | null;
+  pesoLido?: number | null;
+  tipoBalanca?: 'preco' | 'peso' | 'desconhecido';
+  ehCodigoBalanca?: boolean;
   criadoEm: string;
   atualizadoEm: string;
 }

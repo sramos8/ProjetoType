@@ -49,20 +49,22 @@ export function PDV() {
   });
 
   const addProduto = async (produto: Produto) => {
-    if (!venda) return;
-    if (produto.estoque === 0) { setErro('Produto sem estoque'); return; }
-    setCarregando(true);
-    try {
-      const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
-      setVenda(v);
-      tocar('produto');  // ← som ao adicionar pelo clique também
-      setErro('');
-      // No mobile, abre o carrinho ao adicionar primeiro item
-      if (isMobile && v.itens.length === 1) setCarrinhoAberto(true);
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao adicionar');
-    } finally { setCarregando(false); }
-  };
+  if (!venda) return;
+  if (produto.estoque === 0) { setErro('Produto sem estoque'); tocar('erro'); return; }
+  setCarregando(true);
+  try {
+    // Usa preço sugerido do código de balança se disponível
+    const preco = produto.precoSugerido ?? produto.preco;
+    const v = await vendaService.adicionarItem(venda.id, produto.id, 1, preco);
+    setVenda(v);
+    tocar('produto');
+    setErro('');
+    if (isMobile && v.itens.length === 1) setCarrinhoAberto(true);
+  } catch (e: unknown) {
+    tocar('erro');
+    setErro(e instanceof Error ? e.message : 'Erro ao adicionar');
+  } finally { setCarregando(false); }
+};
 
   const removerItem = async (itemId: string) => {
     if (!venda) return;
@@ -106,26 +108,17 @@ useBarcode({
   onLeitura: async (codigo) => {
     setBarcodeMsg('');
     try {
-      // Busca produto pelo código de barras
-      const { data: produto } = await (await fetch(
-        `${import.meta.env.VITE_API_URL || '/api'}/produtos/barcode/${encodeURIComponent(codigo)}`,
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-      )).json() as { data: any };
-
-      if (!produto) {
+      const produto = await produtoService.buscarPorBarcode(codigo);
+      if (produto.estoque === 0) {
         tocar('erro');
-        setBarcodeMsg(`❌ Código ${codigo} não encontrado`);
+        setBarcodeMsg(`❌ ${produto.nome} sem estoque`);
         setTimeout(() => setBarcodeMsg(''), 3000);
         return;
       }
-
-      if (!venda) return;
-      const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
-      setVenda(v);
-      tocar('produto');
-      setBarcodeMsg(`✅ ${produto.nome} adicionado`);
-      setTimeout(() => setBarcodeMsg(''), 2000);
-
+      // Adiciona direto com preço embutido do código de balança
+      await addProduto(produto);
+      setBarcodeMsg(`✅ ${produto.nome} — R$ ${(produto.precoSugerido ?? produto.preco).toFixed(2)}`);
+      setTimeout(() => setBarcodeMsg(''), 2500);
     } catch {
       tocar('erro');
       setBarcodeMsg(`❌ Código ${codigo} não encontrado`);
@@ -137,18 +130,21 @@ useBarcode({
 const handleCameraLeitura = useCallback(async (codigo: string) => {
   try {
     const produto = await produtoService.buscarPorBarcode(codigo);
-    if (!venda) return;
-    const v = await vendaService.adicionarItem(venda.id, produto.id, 1);
-    setVenda(v);
-    tocar('produto');
-    setSucesso(`✅ ${produto.nome} adicionado via câmera`);
-    setTimeout(() => setSucesso(''), 2500);
+    setCameraAberta(false);
+    if (produto.estoque === 0) {
+      tocar('erro');
+      setErro(`❌ ${produto.nome} sem estoque`);
+      setTimeout(() => setErro(''), 3000);
+      return;
+    }
+    await addProduto(produto);
   } catch {
     tocar('erro');
-    setErro(`❌ Código ${codigo} não encontrado`);
+    setErro(`❌ Código não encontrado`);
     setTimeout(() => setErro(''), 3000);
   }
 }, [venda, tocar]);
+
   const totalItens = venda?.itens.reduce((acc, i) => acc + i.quantidade, 0) ?? 0;
 const alterarPrecoItem = async (itemId: string, novoPreco: number) => {
   if (!venda) return;

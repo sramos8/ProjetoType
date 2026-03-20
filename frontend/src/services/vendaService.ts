@@ -18,10 +18,14 @@ export const vendaService = {
     const { data } = await api.get<{ data: Venda[]; total: number }>('/vendas', { params });
     return data;
   },
-  adicionarItem: async (vendaId: string, produtoId: string, quantidade: number) => {
-    const { data } = await api.post<{ data: Venda }>(`/vendas/${vendaId}/itens`, { produtoId, quantidade });
-    return data.data;
-  },
+  adicionarItem: async (vendaId: string, produtoId: string, quantidade: number, precoUnitario?: number) => {
+  const { data } = await api.post<{ data: Venda }>(`/vendas/${vendaId}/itens`, {
+    produtoId,
+    quantidade,
+    ...(precoUnitario !== undefined ? { precoUnitario } : {}),
+  });
+  return data.data;
+},
   removerItem: async (vendaId: string, itemId: string) => {
     const { data } = await api.delete<{ data: Venda }>(`/vendas/${vendaId}/itens/${itemId}`);
     return data.data;
