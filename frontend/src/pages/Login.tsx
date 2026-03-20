@@ -193,7 +193,7 @@ export function Login() {
               {loadingLogin ? 'Entrando...' : 'Entrar →'}
             </button>
 
-            <p style={s.hint}>Acesso padrão: <strong>admin@padaria.com</strong> / <strong>admin123</strong></p>
+            {/* <p style={s.hint}>Acesso padrão: <strong>admin@padaria.com</strong> / <strong>admin123</strong></p> */}
           </form>
         )}
 

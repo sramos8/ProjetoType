@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Produto } from '../types';
 import { CATEGORIAS } from '../types';
+import { verificarAlertas, formatarValidade } from '../utils/validade';
+import { AlertaBadge } from './AlertaBadge';
 
 interface ProdutoCardProps {
   produto: Produto;
@@ -12,6 +14,7 @@ interface ProdutoCardProps {
 export function ProdutoCard({ produto, onEditar, onDeletar, onToggleDisponivel }: ProdutoCardProps) {
   const cat = CATEGORIAS.find(c => c.valor === produto.categoria);
   const precoFmt = produto.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const alerta = verificarAlertas(produto);
 
   return (
     <div style={{ ...styles.card, opacity: produto.disponivel ? 1 : 0.65 }}>
@@ -23,6 +26,16 @@ export function ProdutoCard({ produto, onEditar, onDeletar, onToggleDisponivel }
       </div>
 
       <h3 style={styles.nome}>{produto.nome}</h3>
+      <AlertaBadge alerta={alerta} />
+      {produto.dataValidade && (
+        <div style={{
+          fontSize: '0.72rem', color: alerta.statusValidade === 'vencido' ? '#B91C1C'
+            : alerta.statusValidade === 'vencendo' ? '#C2410C' : '#8B6F5E',
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          📅 Val: {formatarValidade(produto.dataValidade)}
+        </div>
+      )}
       <p style={styles.descricao}>{produto.descricao || '—'}</p>
 
       <div style={styles.meta}>

@@ -29,4 +29,14 @@ export const produtoService = {
     const { data } = await api.get<{ data: Produto }>(`/produtos/barcode/${encodeURIComponent(codigo)}`);
     return data.data;
   },
+  alertas: async () => {
+  const { data } = await api.get<{ data: {
+    vencendo: Produto[];
+    vencidos: Produto[];
+    estoquesBaixos: Produto[];
+    semEstoque: Produto[];
+    totalAlertas: number;
+  }}>('/produtos/alertas');
+  return data.data;
+},
 };

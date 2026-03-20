@@ -13,6 +13,8 @@ const vazio: CriarProdutoDTO = {
   nome: '', categoria: 'pao', preco: 0,
   estoque: 0, descricao: '', disponivel: true,
   codigoBarras: '',
+  estoqueMinimo: 5,
+  dataValidade: null,
 };
 
 export function ProdutoForm({ produto, onSalvar, onCancelar }: ProdutoFormProps) {
@@ -88,7 +90,22 @@ export function ProdutoForm({ produto, onSalvar, onCancelar }: ProdutoFormProps)
             value={form.estoque}
             onChange={e => set('estoque', Number(e.target.value))} />
         </div>
+        {/* Estoque mínimo */}
+        <div style={styles.grupo}>
+          <label style={styles.label}>Estoque mínimo (alerta)</label>
+          <input style={styles.input} type="number" min="0"
+            placeholder="Ex: 5"
+            value={(form as any).estoqueMinimo ?? 5}
+            onChange={e => set('estoqueMinimo' as any, Number(e.target.value))} />
+        </div>
 
+        {/* Data de validade */}
+        <div style={styles.grupo}>
+          <label style={styles.label}>Data de Validade</label>
+          <input style={styles.input} type="date"
+            value={(form as any).dataValidade ?? ''}
+            onChange={e => set('dataValidade' as any, e.target.value || null)} />
+        </div>
         {/* Código de barras — com botão câmera */}
         <div style={styles.grupo}>
           <label style={styles.label}>

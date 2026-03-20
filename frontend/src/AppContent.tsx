@@ -12,6 +12,7 @@ import { Home } from './pages/Home';
 import { CadastroUsuario } from './pages/CadastroUsuario';
 import { useAuth } from './contexts/AuthContext';
 import { useResponsive } from './hooks/useResponsive';
+import { PainelAlertas } from './components/PainelAlertas';
 
 type Tab = 'home' | 'produtos' | 'pdv' | 'historico' | 'relatorio' | 'usuarios';
 
@@ -92,7 +93,13 @@ export default function AppContent() {
           padding: compact ? '0 1rem' : '0 2rem',
           display: 'flex', alignItems: 'center', gap: '1rem',
         }}>
-
+        <PainelAlertas
+            onEditarProduto={prod => {
+                setProdutoEditando(prod);
+                setModalAberto(true);
+                setAba('produtos');
+        }}
+            />
           {/* Logo */}
           <div onClick={() => navegar('home')} style={{ padding: '0.85rem 0', cursor: 'pointer', flexShrink: 0 }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: compact ? '1.2rem' : '1.5rem', color: '#F5DEB3', fontWeight: 700 }}>
