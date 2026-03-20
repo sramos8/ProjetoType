@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useCameraBarcode } from '../../hooks/useCameraBarcode';
 import { useResponsive } from '../../hooks/useResponsive';
 
@@ -11,16 +11,34 @@ interface Props {
 export function ModalCamera({ aberto, onLeitura, onFechar }: Props) {
   const { isMobile } = useResponsive();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [erro, setErro] = useState('');
-  const [lido, setLido] = useState('');
+  const [erro, setErro]   = useState('');
+  const [lido, setLido]   = useState('');
+  const [dica, setDica]   = useState(0);
+
+  // Dicas rotativas para ajudar o usuário
+  const dicas = [
+    'Centralize o código na mira',
+    'Mantenha o celular firme e parado',
+    'Aproxime mais o celular do código',
+    'Certifique-se de boa iluminação',
+    'Aguarde o foco automático estabilizar',
+  ];
+
+  useEffect(() => {
+    if (!aberto) return;
+    const t = setInterval(() => setDica(d => (d + 1) % dicas.length), 3000);
+    return () => clearInterval(t);
+  }, [aberto]);
 
   const handleLeitura = useCallback((codigo: string) => {
     setLido(codigo);
+    // Vibra o celular ao ler (se suportado)
+    if (navigator.vibrate) navigator.vibrate(100);
     setTimeout(() => {
       onLeitura(codigo);
       onFechar();
       setLido('');
-    }, 600);
+    }, 700);
   }, [onLeitura, onFechar]);
 
   useCameraBarcode({
@@ -35,114 +53,140 @@ export function ModalCamera({ aberto, onLeitura, onFechar }: Props) {
   return (
     <div style={{
       position: 'fixed', inset: 0,
-      background: 'rgba(0,0,0,0.92)',
+      background: '#000',
       zIndex: 1000,
       display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
     }}>
 
       {/* Header */}
-      <div style={{ width: '100%', maxWidth: 480, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.25rem', marginBottom: '0.5rem' }}>
+      <div style={{
+        padding: '1rem 1.25rem',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        background: 'rgba(0,0,0,0.8)', flexShrink: 0,
+        zIndex: 2,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '1.4rem' }}>📷</span>
+          <span style={{ fontSize: '1.3rem' }}>📷</span>
           <div>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.1rem', color: '#F5DEB3', fontWeight: 700 }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '1rem', color: '#F5DEB3', fontWeight: 700 }}>
               Leitor de Código de Barras
             </div>
-            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.75rem', color: '#A07850' }}>
+            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.72rem', color: '#A07850' }}>
               Aponte a câmera para o código
             </div>
           </div>
         </div>
-        <button onClick={onFechar} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '0.5rem', padding: '0.4rem 0.8rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem' }}>
+        <button onClick={onFechar} style={{
+          background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)',
+          color: '#fff', borderRadius: '0.5rem', padding: '0.5rem 1rem',
+          cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem',
+        }}>
           ✕ Fechar
         </button>
       </div>
 
-      {/* Viewfinder */}
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, borderRadius: '1rem', overflow: 'hidden', background: '#000' }}>
+      {/* Vídeo — ocupa toda a tela */}
+      <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
         <video
           ref={videoRef}
-          style={{ width: '100%', display: 'block', maxHeight: isMobile ? '60vh' : 400, objectFit: 'cover' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           muted
           playsInline
+          autoPlay
         />
 
-        {/* Mira de leitura */}
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <div style={{ position: 'relative', width: '75%', height: 120 }}>
-            {/* Cantos da mira */}
-            {[
-              { top: 0, left: 0, borderTop: '3px solid #C8822A', borderLeft: '3px solid #C8822A' },
-              { top: 0, right: 0, borderTop: '3px solid #C8822A', borderRight: '3px solid #C8822A' },
-              { bottom: 0, left: 0, borderBottom: '3px solid #C8822A', borderLeft: '3px solid #C8822A' },
-              { bottom: 0, right: 0, borderBottom: '3px solid #C8822A', borderRight: '3px solid #C8822A' },
-            ].map((estilo, i) => (
-              <div key={i} style={{ position: 'absolute', width: 24, height: 24, ...estilo }} />
-            ))}
-
-            {/* Linha de scan animada */}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, height: 2,
-              background: 'linear-gradient(90deg, transparent, #C8822A, transparent)',
-              animation: 'scanLine 1.5s ease-in-out infinite',
-              top: '50%',
-            }} />
-
-            {/* Área semitransparente */}
-            <div style={{ position: 'absolute', inset: 0, border: '1px solid rgba(200,130,42,0.3)', background: 'rgba(200,130,42,0.05)' }} />
-          </div>
+        {/* Overlay escuro nas bordas — destaca a área de leitura */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {/* Topo */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '25%', background: 'rgba(0,0,0,0.55)' }} />
+          {/* Base */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '25%', background: 'rgba(0,0,0,0.55)' }} />
+          {/* Esquerda */}
+          <div style={{ position: 'absolute', top: '25%', left: 0, width: '8%', bottom: '25%', background: 'rgba(0,0,0,0.55)' }} />
+          {/* Direita */}
+          <div style={{ position: 'absolute', top: '25%', right: 0, width: '8%', bottom: '25%', background: 'rgba(0,0,0,0.55)' }} />
         </div>
 
-        {/* Feedback de leitura bem-sucedida */}
+        {/* Mira central */}
+        <div style={{
+          position: 'absolute',
+          top: '25%', left: '8%', right: '8%', bottom: '25%',
+          pointerEvents: 'none',
+        }}>
+          {/* Cantos */}
+          {[
+            { top: 0,    left: 0,    borderTop: '3px solid #C8822A', borderLeft: '3px solid #C8822A'  },
+            { top: 0,    right: 0,   borderTop: '3px solid #C8822A', borderRight: '3px solid #C8822A' },
+            { bottom: 0, left: 0,    borderBottom: '3px solid #C8822A', borderLeft: '3px solid #C8822A'  },
+            { bottom: 0, right: 0,   borderBottom: '3px solid #C8822A', borderRight: '3px solid #C8822A' },
+          ].map((st, i) => (
+            <div key={i} style={{ position: 'absolute', width: 32, height: 32, ...st }} />
+          ))}
+
+          {/* Linha de scan */}
+          <div style={{
+            position: 'absolute', left: 0, right: 0, height: 3,
+            background: 'linear-gradient(90deg, transparent 0%, #C8822A 30%, #F59E0B 50%, #C8822A 70%, transparent 100%)',
+            boxShadow: '0 0 8px #C8822A',
+            animation: 'scanLine 2s ease-in-out infinite',
+          }} />
+        </div>
+
+        {/* Feedback de leitura */}
         {lido && (
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'rgba(16,185,129,0.85)',
+            background: 'rgba(16,185,129,0.9)',
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.15s ease',
+            zIndex: 3,
           }}>
-            <span style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>✅</span>
-            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '0.9rem', color: '#fff', fontWeight: 700 }}>
+            <span style={{ fontSize: '4rem', marginBottom: '0.75rem' }}>✅</span>
+            <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: '1.1rem', color: '#fff', fontWeight: 700 }}>
               Código lido!
             </div>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>
+            <div style={{ fontFamily: "'Courier New', monospace", fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)', marginTop: '0.4rem' }}>
               {lido}
             </div>
           </div>
         )}
+
+        {/* Erro */}
+        {erro && (
+          <div style={{
+            position: 'absolute', bottom: '28%', left: '5%', right: '5%',
+            background: 'rgba(239,68,68,0.9)', borderRadius: '0.75rem',
+            padding: '0.85rem 1rem', zIndex: 3,
+            fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem', color: '#fff', textAlign: 'center',
+          }}>
+            ⚠️ {erro}
+          </div>
+        )}
       </div>
 
-      {/* Erro */}
-      {erro && (
-        <div style={{ marginTop: '1rem', background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '0.5rem', padding: '0.65rem 1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem', maxWidth: 480, width: '90%', textAlign: 'center' }}>
-          ⚠️ {erro}
-          {erro.toLowerCase().includes('câmera') && (
-            <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: '#C0392B' }}>
-              Permita o acesso à câmera nas configurações do navegador
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Dica */}
+      {/* Footer — dica rotativa */}
       {!lido && !erro && (
-        <div style={{ marginTop: '1rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.78rem', color: '#6B7280', textAlign: 'center', maxWidth: 380, padding: '0 1rem' }}>
-          Compatível com EAN-13, EAN-8, QR Code, Code128, Code39 e outros
+        <div style={{
+          padding: '0.85rem 1.25rem', background: 'rgba(0,0,0,0.8)',
+          textAlign: 'center', flexShrink: 0,
+        }}>
+          <div style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: '0.8rem',
+            color: '#A07850', transition: 'opacity 0.3s',
+          }}>
+            💡 {dicas[dica]}
+          </div>
+          <div style={{ marginTop: '0.4rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.72rem', color: '#6B7280' }}>
+            EAN-13 · EAN-8 · Code128 · QR Code
+          </div>
         </div>
       )}
 
-      {/* Animação da linha de scan */}
       <style>{`
         @keyframes scanLine {
-          0%   { top: 10%; }
-          50%  { top: 85%; }
-          100% { top: 10%; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
+          0%   { top: 5%; }
+          50%  { top: 90%; }
+          100% { top: 5%; }
         }
       `}</style>
     </div>
