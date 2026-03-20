@@ -2,6 +2,7 @@ import  { Request, Response } from 'express';
 import  {v4 as uuidv4} from 'uuid';
 import db from '../database/db';
 import type { Produto, CriarProdutoDTO, AtualizarProdutoDTO } from '../models/produto.model';
+import { decodificarCodigoBalanca } from '../utils/codigoBalanca';
 
 function rowToProduto(row: Record<string, unknown>): Produto {
     return {
@@ -126,13 +127,56 @@ export const estatisticas = (req: Request, res: Response): void => {
 // Adicione esta função:
 export const buscarPorCodigoBarras = (req: Request, res: Response): void => {
   const { codigo } = req.params;
-  const produto = db.prepare(
-    'SELECT * FROM produtos WHERE codigoBarras = ? AND disponivel = 1'
-  ).get(codigo) as Record<string, unknown> | undefined;
+  const limpo = codigo.replace(/\D/g, '');
 
-  if (!produto) {
-    res.status(404).json({ erro: `Produto não encontrado para o código: ${codigo}` });
+  // ── Tenta decodificar como código de balança ──────────────
+  const balanca = decodificarCodigoBalanca(limpo);
+
+  if (balanca.ehCodigoBalanca) {
+    // Busca produto pelo prefixo do código de balança (5 dígitos)
+    // Tenta primeiro pelo codigoBalanca exato, depois pelo prefixo
+    let produto = db.prepare(
+      "SELECT * FROM produtos WHERE REPLACE(codigoBarras, ' ', '') LIKE ? AND disponivel = 1"
+    ).get(`2${balanca.codigoProduto}%`) as Record<string, unknown> | undefined;
+
+    // Se não achou pelo código, busca pelo prefixo guardado
+    if (!produto) {
+      produto = db.prepare(
+        "SELECT * FROM produtos WHERE codigoBarras = ? AND disponivel = 1"
+      ).get(balanca.codigoProduto) as Record<string, unknown> | undefined;
+    }
+
+    if (!produto) {
+      res.status(404).json({
+        erro: `Produto não encontrado para o código de balança (prefixo: ${balanca.codigoProduto})`,
+        codigoBalanca: balanca,
+      });
+      return;
+    }
+
+    const produtoFormatado = rowToProduto(produto);
+
+    // Retorna produto com o valor/preço embutido no código
+    res.json({
+      data: {
+        ...produtoFormatado,
+        precoSugerido: balanca.valor,    // preço extraído do código
+        pesoLido:      balanca.peso,     // peso extraído (se for código de peso)
+        tipoBalanca:   balanca.tipo,
+        ehCodigoBalanca: true,
+      },
+    });
     return;
   }
-  res.json({ data: rowToProduto(produto) });
+// ── Código de barras normal ───────────────────────────────
+  const produto = db.prepare(
+    'SELECT * FROM produtos WHERE codigoBarras = ? AND disponivel = 1'
+  ).get(limpo) as Record<string, unknown> | undefined;
+
+  if (!produto) {
+    res.status(404).json({ erro: `Produto não encontrado: ${codigo}` });
+    return;
+  }
+
+  res.json({ data: { ...rowToProduto(produto), ehCodigoBalanca: false } });
 };
