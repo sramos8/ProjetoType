@@ -31,6 +31,7 @@ export default function AppContent() {
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | undefined>();
   const [confirmarDelete, setConfirmarDelete] = useState<string | null>(null);
+  const [alertasKey, setAlertasKey] = useState(0);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -61,6 +62,7 @@ export default function AppContent() {
     setModalAberto(false);
     setProdutoEditando(undefined);
     await carregar();
+    setAlertasKey(k => k + 1);
   };
 
   const handleDeletar = async (id: string) => {
@@ -94,6 +96,7 @@ export default function AppContent() {
           display: 'flex', alignItems: 'center', gap: '1rem',
         }}>
         <PainelAlertas
+            refreshKey={alertasKey}
             onEditarProduto={prod => {
                 setProdutoEditando(prod);
                 setModalAberto(true);

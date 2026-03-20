@@ -6,9 +6,10 @@ import { useResponsive } from '../hooks/useResponsive';
 
 interface Props {
   onEditarProduto?: (p: Produto) => void;
+  refreshKey?: number;  // ← novo
 }
 
-export function PainelAlertas({ onEditarProduto }: Props) {
+export function PainelAlertas({ onEditarProduto, refreshKey = 0 }: Props) {
   const { isMobile } = useResponsive();
   const [dados, setDados] = useState<{
     vencendo: Produto[]; vencidos: Produto[];
@@ -17,6 +18,10 @@ export function PainelAlertas({ onEditarProduto }: Props) {
   } | null>(null);
   const [aberto, setAberto]   = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'validade' | 'estoque'>('validade');
+
+  useEffect(() => {
+    produtoService.alertas().then(setDados).catch(() => {});
+  }, [refreshKey]);
 
   useEffect(() => {
     produtoService.alertas().then(setDados).catch(() => {});
