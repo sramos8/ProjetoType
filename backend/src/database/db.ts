@@ -60,15 +60,32 @@ CREATE TABLE IF NOT EXISTS vendas (
     criadoEm TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS lotes_estoque (
+    id           TEXT PRIMARY KEY,
+    produtoId    TEXT NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+    quantidade   INTEGER NOT NULL CHECK(quantidade > 0),
+    dataValidade TEXT,
+    observacao   TEXT DEFAULT '',
+    criadoEm    TEXT NOT NULL,
+    criadoPor   TEXT REFERENCES usuarios(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_itens_venda ON itens_venda(vendaId);
   CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status);
   CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(criadoEm);
+
+  CREATE INDEX IF NOT EXISTS idx_lotes_produto ON lotes_estoque(produtoId);
+  CREATE INDEX IF NOT EXISTS idx_lotes_validade ON lotes_estoque(dataValidade);
 `);
 
 // Adicione após as outras migrações try/catch:
 try {
   db.exec(`ALTER TABLE produtos ADD COLUMN codigoBarras TEXT`);
 } catch { /* coluna já existe */ }
+
+try {
+  db.exec(`ALTER TABLE lotes_estoque ADD COLUMN codigoBarras TEXT`);
+} catch { /* já existe */ }
 
 // Adicione após as outras migrações try/catch:
 try {
