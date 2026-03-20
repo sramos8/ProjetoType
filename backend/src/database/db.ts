@@ -1,9 +1,11 @@
 import Database from "better-sqlite3";
 import path from "path";
 
-const DB_PATH = path.join(__dirname, '../../padaria.db');
+const DB_PATH = process.env.DB_PATH 
+  || path.join(process.cwd(), 'padaria.db');
 
-const db = new Database(DB_PATH, { verbose: console.log });
+const db = new Database(DB_PATH);
+console.log(`🗄️  Banco: ${DB_PATH}`);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

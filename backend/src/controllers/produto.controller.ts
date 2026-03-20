@@ -47,63 +47,72 @@ export const buscarProduto = (req: Request, res: Response): void => {
 };
 
 export const criarProduto = (req: Request, res: Response): void => {
-    const { nome, categoria, preco, estoque, descricao, disponivel } : CriarProdutoDTO = req.body;
+  const { nome, categoria, preco, estoque, descricao, disponivel, codigoBarras }: CriarProdutoDTO = req.body;
 
-    if (!nome || !categoria || preco === undefined) {
-        res.status(400).json({ error: 'Campos obrigatórios: nome, categoria, preco' });
-        return;
-    }
-    const now = new Date().toISOString();
-    const produto: Produto = {
-        id: uuidv4(),
-        nome: nome.trim(),
-        categoria,
-        preco: Number(preco),
-        estoque: Number(estoque ?? 0),
-        descricao: descricao?.trim() ?? '',
-        disponivel: disponivel ?? true,
-        codigoBarras: null, // ← novo campo
-        criadoEm: now,
-        atualizadoEm: now,
-    };
+  if (!nome || !categoria || preco === undefined) {
+    res.status(400).json({ erro: 'Campos obrigatórios: nome, categoria, preco' });
+    return;
+  }
 
-    db.prepare(`
-    INSERT INTO produtos (id, nome, categoria, preco, estoque, descricao, disponivel, criadoEm, atualizadoEm)
-    VALUES (@id, @nome, @categoria, @preco, @estoque, @descricao, @disponivel, @criadoEm, @atualizadoEm)
-    `).run({ ...produto, disponivel: produto.disponivel ? 1 : 0 });
+  const now = new Date().toISOString();
+  const produto: Produto = {
+    id: uuidv4(),
+    nome: nome.trim(),
+    categoria,
+    preco: Number(preco),
+    estoque: Number(estoque ?? 0),
+    descricao: descricao ?? '',
+    disponivel: disponivel ?? true,
+    codigoBarras: codigoBarras?.trim() || null,  // ← garante que salva
+    criadoEm: now,
+    atualizadoEm: now,
+  };
 
-    res.status(201).json({ data: produto, message: 'Produto criado com sucesso' });
+  db.prepare(`
+    INSERT INTO produtos (id, nome, categoria, preco, estoque, descricao, disponivel, codigoBarras, criadoEm, atualizadoEm)
+    VALUES (@id, @nome, @categoria, @preco, @estoque, @descricao, @disponivel, @codigoBarras, @criadoEm, @atualizadoEm)
+  `).run({ ...produto, disponivel: produto.disponivel ? 1 : 0 });
+
+  res.status(201).json({ data: produto, mensagem: 'Produto criado com sucesso' });
 };
 
 export const atualizarProduto = (req: Request, res: Response): void => {
-    const existente = db.prepare('SELECT * FROM produtos WHERE id = ?').get(req.params.id);
-    if (!existente) {
-        res.status(404).json({ error: 'Produto não encontrado' });
-        return;
+  const existente = db.prepare('SELECT * FROM produtos WHERE id = ?').get(req.params.id);
+  if (!existente) {
+    res.status(404).json({ erro: 'Produto não encontrado' });
+    return;
+  }
+
+  const campos: AtualizarProdutoDTO = req.body;
+  const sets: string[] = [];
+  const valores: Record<string, unknown> = { id: req.params.id, atualizadoEm: new Date().toISOString() };
+
+  const permitidos = ['nome', 'categoria', 'preco', 'estoque', 'descricao', 'disponivel', 'codigoBarras'] as const;
+
+  permitidos.forEach(campo => {
+    if (campo in campos) {
+      sets.push(`${campo} = @${campo}`);
+      if (campo === 'disponivel') {
+        valores[campo] = campos[campo] ? 1 : 0;
+      } else if (campo === 'codigoBarras') {
+        valores[campo] = (campos[campo] as string)?.trim() || null; // ← salva corretamente
+      } else {
+        valores[campo] = campos[campo];
+      }
     }
+  });
 
-    const campos: AtualizarProdutoDTO = req.body;
-    const sets: string[] = [];
-    const valores: Record<string, unknown> = { id: req.params.id, atualizadoEm: new Date().toISOString() };
+  if (sets.length === 0) {
+    res.status(400).json({ erro: 'Nenhum campo para atualizar' });
+    return;
+  }
 
-    const permitidos = ['nome', 'categoria', 'preco', 'estoque', 'descricao', 'disponivel'] as const;
-    permitidos.forEach(campo => {
-        if (campo in campos) {
-            sets.push(`${campo} = @${campo}`);
-            valores[campo] = campo === 'disponivel' ? (campos[campo] ? 1 : 0) : campos[campo];
-        }
-    });
-     if (sets.length === 0) {
-        res.status(400).json({ error: 'Nenhum campo válido para atualização' });
-        return;
-    }
+  sets.push('atualizadoEm = @atualizadoEm');
+  db.prepare(`UPDATE produtos SET ${sets.join(', ')} WHERE id = @id`).run(valores);
 
-    sets.push('atualizadoEm = @atualizadoEm');
-    db.prepare(`UPDATE produtos SET ${sets.join(', ')} WHERE id = @id`).run(valores);
-
-    const atualizado = db.prepare('SELECT * FROM produtos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
-    res.json({ data: rowToProduto(atualizado), message: 'Produto atualizado com sucesso' });
-}
+  const atualizado = db.prepare('SELECT * FROM produtos WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+  res.json({ data: rowToProduto(atualizado), mensagem: 'Produto atualizado com sucesso' });
+};
 
 export const deletarProduto = (req: Request, res: Response): void => {
     const result = db.prepare('DELETE FROM produtos WHERE id = ?').run(req.params.id);
