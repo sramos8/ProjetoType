@@ -340,3 +340,40 @@ export const relatorio = (req: Request, res: Response): void => {
     }
   });
 };
+
+// ── Alterar preço de item na venda ────────────────────────────
+export const alterarPrecoItem = (req: Request, res: Response): void => {
+  const { vendaId, itemId } = req.params;
+  const { novoPreco }: { novoPreco: number } = req.body;
+
+  if (novoPreco === undefined || novoPreco < 0) {
+    res.status(400).json({ erro: 'Preço inválido' });
+    return;
+  }
+
+  const venda = db.prepare('SELECT status FROM vendas WHERE id = ?').get(vendaId) as { status: string } | undefined;
+  if (!venda)                    { res.status(404).json({ erro: 'Venda não encontrada' });
+  console.log('Venda não encontrada'); return; }
+  if (venda.status !== 'aberta') { res.status(400).json({ erro: 'Venda não está aberta' }); return; }
+
+  const item = db.prepare('SELECT * FROM itens_venda WHERE id = ? AND vendaId = ?').get(itemId, vendaId) as ItemVenda | undefined;
+  if (!item) { res.status(404).json({ erro: 'Item não encontrado' }); return; }
+
+  const transacao = db.transaction(() => {
+    // Atualiza preço e subtotal do item
+    db.prepare(`
+      UPDATE itens_venda
+      SET precoUnitario = ?, subtotal = ?
+      WHERE id = ? AND vendaId = ?
+    `).run(novoPreco, novoPreco * item.quantidade, itemId, vendaId);
+
+    // Recalcula total da venda
+    const { total } = db.prepare(
+      'SELECT COALESCE(SUM(subtotal), 0) as total FROM itens_venda WHERE vendaId = ?'
+    ).get(vendaId) as { total: number };
+    db.prepare('UPDATE vendas SET valorTotal = ? WHERE id = ?').run(total, vendaId);
+  });
+
+  transacao();
+  res.json({ data: getVendaComItens(vendaId), mensagem: 'Preço atualizado' });
+};
