@@ -67,7 +67,7 @@ export const criarProduto = (req: Request, res: Response): void => {
     descricao:     descricao ?? '',
     disponivel:    disponivel ?? true,
     codigoBarras:  codigoBarras?.trim() || null,
-    dataValidade:  dataValidade || null,
+    dataValidade:  dataValidade?.trim() || null,
     criadoEm:      now,
     atualizadoEm:  now,
   };
@@ -99,7 +99,7 @@ export const atualizarProduto = (req: Request, res: Response): void => {
   const sets: string[] = [];
   const valores: Record<string, unknown> = { id: req.params.id, atualizadoEm: new Date().toISOString() };
 
-  const permitidos = ['nome', 'categoria', 'preco', 'estoque', 'descricao', 'disponivel', 'codigoBarras'] as const;
+  const permitidos = ['nome', 'categoria', 'preco', 'estoque', 'estoqueMinimo', 'descricao', 'disponivel', 'codigoBarras', 'dataValidade'] as const;
 
   permitidos.forEach(campo => {
     if (campo in campos) {
@@ -107,6 +107,8 @@ export const atualizarProduto = (req: Request, res: Response): void => {
       if (campo === 'disponivel') {
         valores[campo] = campos[campo] ? 1 : 0;
       } else if (campo === 'codigoBarras') {
+        valores[campo] = (campos[campo] as string)?.trim() || null; // ← salva corretamente
+      } else if (campo === 'dataValidade') {
         valores[campo] = (campos[campo] as string)?.trim() || null; // ← salva corretamente
       } else {
         valores[campo] = campos[campo];
