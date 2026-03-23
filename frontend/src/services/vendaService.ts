@@ -18,7 +18,7 @@ export const vendaService = {
     const { data } = await api.get<{ data: Venda[]; total: number }>('/vendas', { params });
     return data;
   },
-  adicionarItem: async (vendaId: string, produtoId: string, quantidade: number, precoUnitario?: number) => {
+ adicionarItem: async (vendaId: string, produtoId: string, quantidade: number, precoUnitario?: number) => {
   const { data } = await api.post<{ data: Venda }>(`/vendas/${vendaId}/itens`, {
     produtoId,
     quantidade,

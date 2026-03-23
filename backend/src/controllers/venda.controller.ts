@@ -25,23 +25,26 @@ export const criarVenda = (req: Request, res: Response): void => {
 // ── Adicionar item ao carrinho ────────────────────────────────
 export const adicionarItem = (req: Request, res: Response): void => {
   const { vendaId } = req.params;
-  const { produtoId, quantidade }: CriarItemDTO = req.body;
+  const { produtoId, quantidade, precoUnitario: precoCustom }: CriarItemDTO & { precoUnitario?: number } = req.body;
 
   const venda = db.prepare('SELECT * FROM vendas WHERE id = ?').get(vendaId) as Venda | undefined;
-  if (!venda) { res.status(404).json({ erro: 'Venda não encontrada' }); return; }
+  if (!venda)                    { res.status(404).json({ erro: 'Venda não encontrada' }); return; }
   if (venda.status !== 'aberta') { res.status(400).json({ erro: 'Venda não está aberta' }); return; }
 
   const produto = db.prepare('SELECT * FROM produtos WHERE id = ?').get(produtoId) as
     { id: string; nome: string; preco: number; estoque: number; disponivel: number } | undefined;
 
-  if (!produto) { res.status(404).json({ erro: 'Produto não encontrado' }); return; }
+  if (!produto)            { res.status(404).json({ erro: 'Produto não encontrado' }); return; }
   if (!produto.disponivel) { res.status(400).json({ erro: 'Produto indisponível' }); return; }
   if (produto.estoque < quantidade) {
-    res.status(400).json({ erro: `Estoque insuficiente. Disponível: ${produto.estoque}` });
-    return;
+    res.status(400).json({ erro: `Estoque insuficiente. Disponível: ${produto.estoque}` }); return;
   }
 
-  // Verificar se produto já está no carrinho
+  // ← USA PREÇO CUSTOMIZADO SE ENVIADO (código de balança), senão usa o preço do cadastro
+  const precoFinal = (precoCustom !== undefined && precoCustom >= 0) ? precoCustom : produto.preco;
+
+  console.log(`[adicionarItem] produto: ${produto.nome}, precoCustom: ${precoCustom}, precoFinal: ${precoFinal}`);
+
   const itemExistente = db.prepare(
     'SELECT * FROM itens_venda WHERE vendaId = ? AND produtoId = ?'
   ).get(vendaId, produtoId) as ItemVenda | undefined;
@@ -50,15 +53,15 @@ export const adicionarItem = (req: Request, res: Response): void => {
     if (itemExistente) {
       const novaQtd = itemExistente.quantidade + quantidade;
       if (produto.estoque < novaQtd) throw new Error(`Estoque insuficiente. Disponível: ${produto.estoque}`);
-      db.prepare('UPDATE itens_venda SET quantidade = ?, subtotal = ? WHERE id = ?')
-        .run(novaQtd, novaQtd * produto.preco, itemExistente.id);
+      // Atualiza com o novo preço customizado
+      db.prepare('UPDATE itens_venda SET quantidade = ?, precoUnitario = ?, subtotal = ? WHERE id = ?')
+        .run(novaQtd, precoFinal, novaQtd * precoFinal, itemExistente.id);
     } else {
       db.prepare(`
         INSERT INTO itens_venda (id, vendaId, produtoId, nomeProduto, quantidade, precoUnitario, subtotal)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(uuidv4(), vendaId, produtoId, produto.nome, quantidade, produto.preco, quantidade * produto.preco);
+      `).run(uuidv4(), vendaId, produtoId, produto.nome, quantidade, precoFinal, quantidade * precoFinal);
     }
-    // Recalcular total
     const { total } = db.prepare(
       'SELECT COALESCE(SUM(subtotal), 0) as total FROM itens_venda WHERE vendaId = ?'
     ).get(vendaId) as { total: number };
