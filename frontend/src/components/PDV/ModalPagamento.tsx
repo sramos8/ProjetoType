@@ -64,7 +64,7 @@ export function ModalPagamento({ aberto, valorTotal, onConfirmar, onFechar }: Pr
   // ── Tela: Deseja imprimir? ────────────────────────────────
   if (perguntarImpressao && vendaPronta) {
     return (
-      <Modal aberto={aberto} titulo="✅ Venda Concluída" onFechar={handleFechar}>
+      <Modal aberto={aberto || perguntarImpressao} titulo="✅ Venda Concluída" onFechar={handleFechar}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', textAlign: 'center' }}>
 
           <div style={{ fontSize: '3.5rem', lineHeight: 1 }}>🎉</div>
